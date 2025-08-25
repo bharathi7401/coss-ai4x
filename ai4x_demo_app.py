@@ -1,16 +1,11 @@
 import psycopg2
 import psycopg2.extras
-<<<<<<< Updated upstream
 import statistics
-from fastapi import FastAPI, HTTPException, UploadFile, File, Form
-=======
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Response
->>>>>>> Stashed changes
 from fastapi.middleware.cors import CORSMiddleware
 import time
 import uuid
 from datetime import datetime, timezone
-from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from typing import Optional, Dict, Any
 from services.nmt_service import NMTService
@@ -160,21 +155,6 @@ def metrics():
     """Prometheus metrics endpoint"""
     return Response(content=get_metrics(), media_type="text/plain")
 
-# Add CORS middleware
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# Add metrics endpoint
-@app.get("/metrics")
-def metrics():
-    """Prometheus metrics endpoint"""
-    return Response(content=get_metrics(), media_type="text/plain")
-
 class PipelineInput(BaseModel):
     customerName: str
     customerAppName: str
@@ -225,98 +205,59 @@ def run_pipeline(payload: PipelineInput):
         # ---- Step 2+: Run customer-specific pipeline ----
         current_output = input_text
 
-<<<<<<< Updated upstream
-    if "NMT" in pipeline:
-        start = time.time()
-        usage["NMT"] = str(len(current_output))
-        current_output = nmt_service.translate_text(
-            text=current_output,
-            source_lang=source_language,
-            target_lang=target_language
-        )
-        latencies["NMT"] = f"{int((time.time() - start) * 1000)}ms"
-        pipeline_output["NMT"] = current_output["translated_text"]
-
-    if "LLM" in pipeline:
-        start = time.time()
-        current_output = llm_service.process_query(current_output)
-        latencies["LLM"] = f"{int((time.time() - start) * 1000)}ms"
-        pipeline_output["LLM"] = current_output["response"]
-        response_data = current_output["response"]
-        print("LLM Output: ", current_output)
-        usage["LLM"] = str(current_output["total_tokens"])
-
-        #  # Step: Backward NMT (English → original detected language)
-        # start = time.time()
-        # back_translation = nmt_service.translate_text(
-        #     text=current_output["response"],
-        #     source_lang="en",
-        #     target_lang=source_language
-        # )
-        # # latencies["BackNMT"] = f"{int((time.time() - start) * 1000)}ms"
-        # # pipeline_output["BackNMT"] = back_translation["translated_text"]
-
-        # # Update current_output for TTS
-        # current_output = back_translation["translated_text"]
-        # response_data = current_output
-
-    if "TTS" in pipeline:
-        start = time.time()
-        print("TTS Input: ", current_output)
-        usage["TTS"] = str(len(current_output["response"]))
-        current_output = tts_service.text_to_speech(current_output["response"], target_language, gender="female")
-        latencies["TTS"] = f"{int((time.time() - start) * 1000)}ms"
-        pipeline_output["TTS"] = current_output["audio_content"]
-        response_data = current_output["audio_content"]
-=======
         if "NMT" in pipeline:
             metrics_collector.start_component(request_id_metrics, "NMT")
             start = time.time()
-            try:
-                current_output = nmt_service.translate_text(
-                    text=current_output,
-                    source_lang=source_language,
-                    target_lang=target_language
-                )
-                latencies["NMT"] = f"{int((time.time() - start) * 1000)}ms"
-                pipeline_output["NMT"] = current_output["translated_text"]
-                metrics_collector.end_component(request_id_metrics, "NMT", True)
-            except Exception as e:
-                metrics_collector.end_component(request_id_metrics, "NMT", False)
-                raise e
+            usage["NMT"] = str(len(current_output))
+            current_output = nmt_service.translate_text(
+                text=current_output,
+                source_lang=source_language,
+                target_lang=target_language
+            )
+            latencies["NMT"] = f"{int((time.time() - start) * 1000)}ms"
+            pipeline_output["NMT"] = current_output["translated_text"]
+            metrics_collector.end_component(request_id_metrics, "NMT", True)
 
         if "LLM" in pipeline:
             metrics_collector.start_component(request_id_metrics, "LLM")
             start = time.time()
-            try:
-                current_output = llm_service.process_query(current_output)
-                latencies["LLM"] = f"{int((time.time() - start) * 1000)}ms"
-                pipeline_output["LLM"] = current_output["response"]
-                response_data = current_output["response"]
-                metrics_collector.end_component(request_id_metrics, "LLM", True)
-            except Exception as e:
-                metrics_collector.end_component(request_id_metrics, "LLM", False)
-                raise e
->>>>>>> Stashed changes
+            current_output = llm_service.process_query(current_output)
+            latencies["LLM"] = f"{int((time.time() - start) * 1000)}ms"
+            pipeline_output["LLM"] = current_output["response"]
+            response_data = current_output["response"]
+            print("LLM Output: ", current_output)
+            usage["LLM"] = str(current_output["total_tokens"])
+            metrics_collector.end_component(request_id_metrics, "LLM", True)
 
         if "TTS" in pipeline:
             metrics_collector.start_component(request_id_metrics, "TTS")
             start = time.time()
-            try:
-                current_output = tts_service.text_to_speech(current_output["response"], target_language, gender="female")
-                latencies["TTS"] = f"{int((time.time() - start) * 1000)}ms"
-                pipeline_output["TTS"] = current_output["audio_content"]
-                response_data = current_output["audio_content"]
-                metrics_collector.end_component(request_id_metrics, "TTS", True)
-            except Exception as e:
-                metrics_collector.end_component(request_id_metrics, "TTS", False)
-                raise e
+            print("TTS Input: ", current_output)
+            usage["TTS"] = str(len(current_output["response"]))
+            current_output = tts_service.text_to_speech(current_output["response"], target_language, gender="female")
+            latencies["TTS"] = f"{int((time.time() - start) * 1000)}ms"
+            pipeline_output["TTS"] = current_output["audio_content"]
+            response_data = current_output["audio_content"]
+            metrics_collector.end_component(request_id_metrics, "TTS", True)
 
         # ---- Finalize timings ----
         total_elapsed = int((time.time() - start_pipeline) * 1000)
         latencies["pipelineTotal"] = f"{total_elapsed}ms"
+        
+        # End request with success
+        metrics_collector.end_request(request_id_metrics, 200)
 
-<<<<<<< Updated upstream
+    except Exception as e:
+        # End request with error
+        metrics_collector.end_request(request_id_metrics, 500)
+        # End any active component measurements
+        for component in ["LangDetection", "NMT", "LLM", "TTS"]:
+            try:
+                metrics_collector.end_component(request_id_metrics, component, False)
+            except:
+                pass
+        raise HTTPException(status_code=500, detail=f"Pipeline error: {str(e)}")
+
     # ---- Save to DB ----
     conn = get_connection()
     cur = conn.cursor()
@@ -354,51 +295,6 @@ def run_pipeline(payload: PipelineInput):
         "usage": usage,
         "timestamp": datetime.now(timezone.utc).isoformat()
     }
-=======
-        # ---- Save to DB ----
-        try:
-            conn = get_connection()
-            cur = conn.cursor()
-            cur.execute(f"""
-                INSERT INTO {TABLE_NAME} 
-                (requestId, customerName, customerApp, langdetectionLatency, nmtLatency, llmLatency, ttsLatency, overallPipelineLatency, timestamp)
-                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
-            """, (
-                request_id,
-                customer,
-                appname,
-                latencies.get("LangDetection", ""),
-                latencies.get("NMT", ""),
-                latencies.get("LLM", ""),
-                latencies.get("TTS", ""),
-                latencies.get("pipelineTotal", ""),
-                datetime.now(timezone.utc)
-            ))
-            conn.commit()
-            cur.close()
-            conn.close()
-        except Exception as e:
-            print(f"Database error: {e}")
-            # Don't fail the request due to DB issues
-
-        # End metrics collection with success
-        metrics_collector.end_request(request_id_metrics, 200)
-
-        # ---- Return API contract ----
-        return {
-            "requestId": request_id,
-            "status": "success",
-            "pipelineOutput": pipeline_output,
-            "responseData": response_data,
-            "latency": latencies,
-            "timestamp": datetime.now(timezone.utc).isoformat()
-        }
-
-    except Exception as e:
-        # End metrics collection with error
-        metrics_collector.end_request(request_id_metrics, 500)
-        raise HTTPException(status_code=500, detail=f"Pipeline processing error: {str(e)}")
->>>>>>> Stashed changes
 
 
 # ----------------------------
@@ -422,7 +318,6 @@ def get_all_customers():
 
 @app.get("/customers/{customerName}")
 def get_customer_by_name(customerName: str):
-<<<<<<< Updated upstream
     conn = get_connection()
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     cur.execute(f"SELECT * FROM {TABLE_NAME} WHERE customerName = %s", (customerName,))
@@ -496,18 +391,3 @@ def get_customer_aggregates(customerName: str):
         "customerName": customerName,
         "aggregates": aggregates
     }
-=======
-    request_id_metrics = metrics_collector.start_request("system", "db", "get_customer")
-    try:
-        conn = get_connection()
-        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-        cur.execute(f"SELECT * FROM {TABLE_NAME} WHERE customerName = %s", (customerName,))
-        rows = cur.fetchall()
-        cur.close()
-        conn.close()
-        metrics_collector.end_request(request_id_metrics, 200)
-        return rows
-    except Exception as e:
-        metrics_collector.end_request(request_id_metrics, 500)
-        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
->>>>>>> Stashed changes
