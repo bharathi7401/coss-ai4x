@@ -1,5 +1,6 @@
 import psycopg2
 import psycopg2.extras
+import statistics
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 import time
@@ -30,7 +31,7 @@ llm_service = LLMService()
 tts_service = TTSService()
 weather_service = WeatherService()
 
-TABLE_NAME = "ai4x_demo_requests_log"
+TABLE_NAME = "ai4x_demo_requests_log_v2"
 
 def detect_language_from_text(text: str) -> str:
     """
@@ -112,12 +113,16 @@ def init_db():
             llmLatency TEXT,
             ttsLatency TEXT,
             overallPipelineLatency TEXT,
+            nmtUsage INT,
+            llmUsage INT,
+            ttsUsage INT,
             timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
     """)
     conn.commit()
     cur.close()
     conn.close()
+
 
 init_db()
 
@@ -153,6 +158,7 @@ def call_model(model_name: str, input_text: str) -> str:
 # ----------------------------
 @app.post("/pipeline")
 def run_pipeline(payload: PipelineInput):
+    usage = {"NMT": "0", "LLM": "0", "TTS": "0"}
     customer = payload.customerName
     appname = payload.customerAppName
     pipeline = PIPELINES.get(customer.lower()) or PIPELINES.get(customer)
@@ -179,6 +185,7 @@ def run_pipeline(payload: PipelineInput):
 
     if "NMT" in pipeline:
         start = time.time()
+        usage["NMT"] = str(len(current_output))
         current_output = nmt_service.translate_text(
             text=current_output,
             source_lang=source_language,
@@ -193,9 +200,27 @@ def run_pipeline(payload: PipelineInput):
         latencies["LLM"] = f"{int((time.time() - start) * 1000)}ms"
         pipeline_output["LLM"] = current_output["response"]
         response_data = current_output["response"]
+        print("LLM Output: ", current_output)
+        usage["LLM"] = str(current_output["total_tokens"])
+
+        #  # Step: Backward NMT (English → original detected language)
+        # start = time.time()
+        # back_translation = nmt_service.translate_text(
+        #     text=current_output["response"],
+        #     source_lang="en",
+        #     target_lang=source_language
+        # )
+        # # latencies["BackNMT"] = f"{int((time.time() - start) * 1000)}ms"
+        # # pipeline_output["BackNMT"] = back_translation["translated_text"]
+
+        # # Update current_output for TTS
+        # current_output = back_translation["translated_text"]
+        # response_data = current_output
 
     if "TTS" in pipeline:
         start = time.time()
+        print("TTS Input: ", current_output)
+        usage["TTS"] = str(len(current_output["response"]))
         current_output = tts_service.text_to_speech(current_output["response"], target_language, gender="female")
         latencies["TTS"] = f"{int((time.time() - start) * 1000)}ms"
         pipeline_output["TTS"] = current_output["audio_content"]
@@ -212,8 +237,9 @@ def run_pipeline(payload: PipelineInput):
     cur = conn.cursor()
     cur.execute(f"""
         INSERT INTO {TABLE_NAME} 
-        (requestId, customerName, customerApp, langdetectionLatency, nmtLatency, llmLatency, ttsLatency, overallPipelineLatency, timestamp)
-        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
+        (requestId, customerName, customerApp, langdetectionLatency, nmtLatency, llmLatency, ttsLatency, overallPipelineLatency,
+        nmtUsage, llmUsage, ttsUsage, timestamp)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
     """, (
         request_id,
         customer,
@@ -223,8 +249,12 @@ def run_pipeline(payload: PipelineInput):
         latencies.get("LLM", ""),
         latencies.get("TTS", ""),
         latencies.get("pipelineTotal", ""),
+        str(usage.get("NMT", "0")),
+        str(usage.get("LLM", "0")),
+        str(usage.get("TTS", "0")),
         datetime.now(timezone.utc)
     ))
+
     conn.commit()
     cur.close()
     conn.close()
@@ -236,6 +266,7 @@ def run_pipeline(payload: PipelineInput):
         "pipelineOutput": pipeline_output,
         "responseData": response_data,
         "latency": latencies,
+        "usage": usage,
         "timestamp": datetime.now(timezone.utc).isoformat()
     }
 
@@ -262,3 +293,69 @@ def get_customer_by_name(customerName: str):
     cur.close()
     conn.close()
     return rows
+
+
+@app.get("/customer_aggregates")
+def get_customer_aggregates(customerName: str):
+    conn = get_connection()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+
+    cur.execute(f"""
+        SELECT customerName, customerApp,
+               langdetectionLatency, nmtLatency, llmLatency, ttsLatency, overallPipelineLatency,
+               nmtUsage, llmUsage, ttsUsage
+        FROM {TABLE_NAME}
+        WHERE customerName = %s
+    """, (customerName,))
+
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
+
+    if not rows:
+        return {"customerName": customerName, "aggregates": []}
+
+    # Group data by customerApp
+    grouped = {}
+    for row in rows:
+        app_key = row["customerapp"]
+        if app_key not in grouped:
+            grouped[app_key] = {k: [] for k in [
+                "langdetectionlatency", "nmtlatency", "llmlatency", "ttslatency", "overallpipelinelatency",
+                "nmtusage", "llmusage", "ttsusage"
+            ]}
+        for col in grouped[app_key]:
+            val = row.get(col)
+            if val is None:
+                grouped[app_key][col].append(0.0)
+            else:
+                try:
+                    # Remove "ms" suffix if exists, convert to float
+                    if isinstance(val, str) and val.endswith("ms"):
+                        num = float(val.replace("ms", "").strip())
+                    else:
+                        num = float(val)
+                    grouped[app_key][col].append(num)
+                except Exception:
+                    grouped[app_key][col].append(0.0)
+
+    # Compute averages per app
+    aggregates = []
+    for app_key, metrics in grouped.items():
+        aggregates.append({
+            "customerName": customerName,
+            "customerApp": app_key,
+            "avg_langdetectionLatency": statistics.mean(metrics["langdetectionlatency"]) if metrics["langdetectionlatency"] else 0.0,
+            "avg_nmtLatency": statistics.mean(metrics["nmtlatency"]) if metrics["nmtlatency"] else 0.0,
+            "avg_llmLatency": statistics.mean(metrics["llmlatency"]) if metrics["llmlatency"] else 0.0,
+            "avg_ttsLatency": statistics.mean(metrics["ttslatency"]) if metrics["ttslatency"] else 0.0,
+            "avg_overallPipelineLatency": statistics.mean(metrics["overallpipelinelatency"]) if metrics["overallpipelinelatency"] else 0.0,
+            "avg_nmtUsage": statistics.mean(metrics["nmtusage"]) if metrics["nmtusage"] else 0.0,
+            "avg_llmUsage": statistics.mean(metrics["llmusage"]) if metrics["llmusage"] else 0.0,
+            "avg_ttsUsage": statistics.mean(metrics["ttsusage"]) if metrics["ttsusage"] else 0.0,
+        })
+
+    return {
+        "customerName": customerName,
+        "aggregates": aggregates
+    }

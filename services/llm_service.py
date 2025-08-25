@@ -99,6 +99,7 @@ class LLMService:
             # loop = asyncio.get_event_loop()
             logger.info(f"Sending prompt to Gemini: {prompt[:200]}...")
             response =  self.model.generate_content(prompt)
+            response_tokens = response.usage_metadata.total_token_count
             
             # Extract JSON from response
             response_text = response.text.strip()
@@ -126,7 +127,8 @@ class LLMService:
                     "location": result.get("parameters", {}).get("location", ""),
                     "confidence": result.get("confidence", 0.7),
                     "parameters": result.get("parameters", {}),
-                    "raw_response": response_text
+                    "raw_response": response_text,
+                    "total_tokens": response_tokens
                 }
             
             else:
