@@ -8,12 +8,12 @@ logger = logging.getLogger(__name__)
 
 class TTSService:
     def __init__(self):
-        self.tts_url = "https://dhruva-api.bhashini.gov.in/services/inference/tts"
-        self.service_id = "ai4bharat/indic-tts-coqui-misc-gpu--t4"
+        self.tts_url = "https://api.dhruva.ekstep.ai/services/inference/tts"
+        self.service_id = "ai4bharat/indic-tts-misc--gpu-t4"
         self.headers = {
             'Accept': '*/*',
             'User-Agent': 'Voice-Assistant-API',
-            'Authorization': 'a7oDZPwaQoo4-Enr4QuXirLC4V0e6-3GDfK1HgX2nwpoyxsOurrlJg__wIJ4YvO3',
+            'Authorization': 'NvsNYWKA1GqQDvopXQZ6I7VzKAlv8LfGjcTNVyErIXzK_UPYfsKd0Wipespe2xvE',
             'Content-Type': 'application/json'
         }
     
@@ -44,9 +44,11 @@ class TTSService:
                     }
                 ]
             }
+
             
             # Make async request
             # loop = asyncio.get_event_loop()
+            service_id = "ai4bharat/indic-tts-dravidian--gpu-t4" if language in ["ta", "te", "kn", "nl"] else "ai4bharat/indic-tts-indo-aryan--gpu-t4"
             response = requests.post(
                     f"{self.tts_url}?serviceId={self.service_id}",
                     headers=self.headers, 
@@ -125,7 +127,7 @@ class TTSService:
                 },
                 "input": [{"source": text} for text in texts]
             }
-            
+            service_id = "ai4bharat/indic-tts-dravidian--gpu-t4" if language in ["ta", "te", "kn", "nl"] else "ai4bharat/indic-tts-indo-aryan--gpu-t4"
             # loop = asyncio.get_event_loop()
             response = requests.post(
                     f"{self.tts_url}?serviceId={self.service_id}",

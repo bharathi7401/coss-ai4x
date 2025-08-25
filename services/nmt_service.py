@@ -19,32 +19,32 @@ class NMTService:
         # Language-specific service IDs for NMT (updated format)
         self.service_ids = {
             # Hindi to English and vice versa
-            "hi-en": "ai4bharat/indictrans-v2-all-gpu--t4",
-            "en-hi": "ai4bharat/indictrans-v2-all-gpu--t4",
+            "hi-en": "ai4bharat/indictrans--gpu-t4",
+            "en-hi": "ai4bharat/indictrans--gpu-t4",
             # Tamil to English and vice versa
-            "ta-en": "ai4bharat/indictrans-v2-all-gpu--t4", 
-            "en-ta": "ai4bharat/indictrans-v2-all-gpu--t4",
+            "ta-en": "ai4bharat/indictrans--gpu-t4", 
+            "en-ta": "ai4bharat/indictrans--gpu-t4",
             # Telugu to English and vice versa
-            "te-en": "ai4bharat/indictrans-v2-all-gpu--t4",
-            "en-te": "ai4bharat/indictrans-v2-all-gpu--t4",
+            "te-en": "ai4bharat/indictrans--gpu-t4",
+            "en-te": "ai4bharat/indictrans--gpu-t4",
             # Bengali to English and vice versa
-            "bn-en": "ai4bharat/indictrans-v2-all-gpu--t4",
-            "en-bn": "ai4bharat/indictrans-v2-all-gpu--t4",
+            "bn-en": "ai4bharat/indictrans--gpu-t4",
+            "en-bn": "ai4bharat/indictrans--gpu-t4",
             # Malayalam to English and vice versa
-            "ml-en": "ai4bharat/indictrans-v2-all-gpu--t4",
-            "en-ml": "ai4bharat/indictrans-v2-all-gpu--t4",
+            "ml-en": "ai4bharat/indictrans--gpu-t4",
+            "en-ml": "ai4bharat/indictrans--gpu-t4",
             # Kannada to English and vice versa
-            "kn-en": "ai4bharat/indictrans-v2-all-gpu--t4",
-            "en-kn": "ai4bharat/indictrans-v2-all-gpu--t4",
+            "kn-en": "ai4bharat/indictrans--gpu-t4",
+            "en-kn": "ai4bharat/indictrans--gpu-t4",
             # Gujarati to English and vice versa
-            "gu-en": "ai4bharat/indictrans-v2-all-gpu--t4",
-            "en-gu": "ai4bharat/indictrans-v2-all-gpu--t4",
+            "gu-en": "ai4bharat/indictrans--gpu-t4",
+            "en-gu": "ai4bharat/indictrans--gpu-t4",
             # Marathi to English and vice versa
-            "mr-en": "ai4bharat/indictrans-v2-all-gpu--t4",
-            "en-mr": "ai4bharat/indictrans-v2-all-gpu--t4",
+            "mr-en": "ai4bharat/indictrans--gpu-t4",
+            "en-mr": "ai4bharat/indictrans--gpu-t4",
             # Punjabi to English and vice versa
-            "pa-en": "ai4bharat/indictrans-v2-all-gpu--t4",
-            "en-pa": "ai4bharat/indictrans-v2-all-gpu--t4"
+            "pa-en": "ai4bharat/indictrans--gpu-t4",
+            "en-pa": "ai4bharat/indictrans--gpu-t4"
         }
         
         # Language mapping

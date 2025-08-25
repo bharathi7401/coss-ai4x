@@ -3,8 +3,8 @@ from typing import Dict, Any
 
 class Config:
     # API Configuration
-    DHRUVA_API_BASE = "https://dhruva-api.bhashini.gov.in/services/inference"
-    DHRUVA_AUTH_TOKEN = os.getenv("DHRUVA_AUTH_TOKEN", "a7oDZPwaQoo4-Enr4QuXirLC4V0e6-3GDfK1HgX2nwpoyxsOurrlJg__wIJ4YvO3")
+    DHRUVA_API_BASE = "https://api.dhruva.ekstep.ai/services/inference"
+    DHRUVA_AUTH_TOKEN = os.getenv("DHRUVA_AUTH_TOKEN", "NvsNYWKA1GqQDvopXQZ6I7VzKAlv8LfGjcTNVyErIXzK_UPYfsKd0Wipespe2xvE")
     
     ASR_API_BASE = "https://13.203.149.17/services/inference"
     
