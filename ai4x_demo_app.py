@@ -2,7 +2,6 @@ import psycopg2
 import psycopg2.extras
 import statistics
 import numpy as np
-import psutil
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 # from prometheus_fastapi_instrumentator import Instrumentator
 from fastapi.middleware.cors import CORSMiddleware
@@ -20,7 +19,7 @@ from config import Config
 import threading
 
 # --- Prometheus core ---
-from prometheus_client import Counter, Histogram, Gauge
+# from prometheus_client import Counter, Histogram, Gauge
 
 # ----------------------------
 # Database connection
