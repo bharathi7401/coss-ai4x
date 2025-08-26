@@ -1,7 +1,10 @@
 import psycopg2
 import psycopg2.extras
 import statistics
+import numpy as np
+import psutil
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form
+from prometheus_fastapi_instrumentator import Instrumentator
 from fastapi.middleware.cors import CORSMiddleware
 import time
 import uuid
@@ -14,6 +17,10 @@ from services.llm_service import LLMService
 from services.tts_service import TTSService
 from services.weather_service import WeatherService
 from config import Config
+import threading
+
+# --- Prometheus core ---
+from prometheus_client import Counter, Histogram, Gauge
 
 # ----------------------------
 # Database connection
@@ -31,75 +38,83 @@ llm_service = LLMService()
 tts_service = TTSService()
 weather_service = WeatherService()
 
-TABLE_NAME = "ai4x_demo_requests_log_v2"
+TABLE_NAME = "ai4x_demo_requests_log_v4"
 
+# ----------------------------
+# Pipeline-level Prometheus Metrics
+# # ----------------------------
+# REQUEST_COUNT = Counter(
+#     "pipeline_requests_total",
+#     "Total number of pipeline requests",
+#     ["customerName", "customerApp", "requestId", "status"]
+# )
+
+# REQUEST_LATENCY = Histogram(
+#     "pipeline_request_latency_seconds",
+#     "Latency of pipeline requests in seconds",
+#     ["customerName", "customerApp", "requestId"]
+# )
+
+# THROUGHPUT = Counter(
+#     "pipeline_throughput_total",
+#     "Total pipeline requests processed (for throughput/sec calculation)",
+#     ["customerName", "customerApp", "requestId"]
+# )
+
+# ERROR_COUNT = Counter(
+#     "pipeline_failed_requests_total",
+#     "Total failed pipeline requests",
+#     ["customerName", "customerApp", "requestId"]
+# )
+
+# # ----------------------------
+# # Service-level Prometheus Metrics
+# # ----------------------------
+# SERVICE_LATENCY = Histogram(
+#     "service_latency_seconds",
+#     "Latency of individual services in seconds",
+#     ["customerName", "customerApp", "requestId", "service"]
+# )
+
+# SERVICE_THROUGHPUT = Counter(
+#     "service_throughput_total",
+#     "Total requests processed per service",
+#     ["customerName", "customerApp", "requestId", "service"]
+# )
+
+# SERVICE_ERRORS = Counter(
+#     "service_failed_requests_total",
+#     "Total failed service requests",
+#     ["customerName", "customerApp", "requestId", "service"]
+# )
+
+# # ----------------------------
+# # System Metrics
+# # ----------------------------
+# CPU_USAGE = Gauge("system_cpu_usage_percent", "CPU usage percent")
+# MEMORY_USAGE = Gauge("system_memory_usage_percent", "Memory usage percent")
+
+# ----------------------------
+# Utility Functions
+# ----------------------------
 def detect_language_from_text(text: str) -> str:
-    """
-    Detect language from text input using simple heuristics and character patterns
-    
-    Args:
-        text: Input text to analyze
-        
-    Returns:
-        Detected language code
-    """
     text_lower = text.lower().strip()
-    
-    # Hindi detection (Devanagari script)
-    if any('\u0900' <= char <= '\u097F' for char in text):
-        return "hi"
-    
-    # Tamil detection (Tamil script)
-    if any('\u0B80' <= char <= '\u0BFF' for char in text):
-        return "ta"
-    
-    # Telugu detection (Telugu script)
-    if any('\u0C00' <= char <= '\u0C7F' for char in text):
-        return "te"
-    
-    # Bengali detection (Bengali script)
-    if any('\u0980' <= char <= '\u09FF' for char in text):
-        return "bn"
-    
-    # Malayalam detection (Malayalam script)
-    if any('\u0D00' <= char <= '\u0D7F' for char in text):
-        return "ml"
-    
-    # Kannada detection (Kannada script)
-    if any('\u0C80' <= char <= '\u0CFF' for char in text):
-        return "kn"
-    
-    # Gujarati detection (Gujarati script)
-    if any('\u0A80' <= char <= '\u0AFF' for char in text):
-        return "gu"
-    
-    # Marathi detection (same script as Hindi, use word patterns)
-    marathi_words = ['का', 'आहे', 'मी', 'तू', 'ते', 'हे', 'या', 'ना']
-    if any(word in text for word in marathi_words):
-        return "mr"
-    
-    # Punjabi detection (Gurmukhi script)
-    if any('\u0A00' <= char <= '\u0A7F' for char in text):
-        return "pa"
-    
-    # Common Hindi words (fallback for Romanized Hindi)
-    hindi_words = ['namaste', 'kaise', 'hai', 'mein', 'aap', 'kya', 'haan', 'nahi', 'dhanyawad']
-    if any(word in text_lower for word in hindi_words):
-        return "hi"
-    
-    # Common Tamil romanized words
-    tamil_words = ['vanakkam', 'eppadi', 'irukkirathu', 'nandri', 'enna', 'illai', 'aam']
-    if any(word in text_lower for word in tamil_words):
-        return "ta"
-    
-    # Default to English if no other language detected
+    if any('\u0900' <= char <= '\u097F' for char in text): return "hi"
+    if any('\u0B80' <= char <= '\u0BFF' for char in text): return "ta"
+    if any('\u0C00' <= char <= '\u0C7F' for char in text): return "te"
+    if any('\u0980' <= char <= '\u09FF' for char in text): return "bn"
+    if any('\u0D00' <= char <= '\u0D7F' for char in text): return "ml"
+    if any('\u0C80' <= char <= '\u0CFF' for char in text): return "kn"
+    if any('\u0A80' <= char <= '\u0AFF' for char in text): return "gu"
+    if any(word in text for word in ['का', 'आहे', 'मी', 'तू', 'ते', 'हे', 'या', 'ना']): return "mr"
+    if any('\u0A00' <= char <= '\u0A7F' for char in text): return "pa"
+    if any(word in text_lower for word in ['namaste', 'kaise', 'hai', 'mein', 'aap', 'kya', 'haan', 'nahi', 'dhanyawad']): return "hi"
+    if any(word in text_lower for word in ['vanakkam', 'eppadi', 'irukkirathu', 'nandri', 'enna', 'illai', 'aam']): return "ta"
     return "en"
-
 
 def get_connection():
     return psycopg2.connect(**DB_CONFIG)
 
-# Create table if not exists
 def init_db():
     conn = get_connection()
     cur = conn.cursor()
@@ -113,9 +128,9 @@ def init_db():
             llmLatency TEXT,
             ttsLatency TEXT,
             overallPipelineLatency TEXT,
-            nmtUsage INT,
-            llmUsage INT,
-            ttsUsage INT,
+            nmtUsage TEXT,
+            llmUsage TEXT,
+            ttsUsage TEXT,
             timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
     """)
@@ -123,13 +138,8 @@ def init_db():
     cur.close()
     conn.close()
 
-
 init_db()
 
-# ----------------------------
-# Pipeline configuration
-# ----------------------------
-# Hardcoded pipelines for different customers
 PIPELINES = {
     "cust1": ["NMT", "LLM", "TTS"],
     "cust2": ["NMT", "LLM"]
@@ -139,30 +149,22 @@ PIPELINES = {
 # FastAPI app
 # ----------------------------
 app = FastAPI()
+# Instrumentator().instrument(app).expose(app)
 
 class PipelineInput(BaseModel):
     customerName: str
     customerAppName: str
-    input: Dict[str, str] # e.g., {"text": "some text", "language": "en" (optional)}
-
-# ----------------------------
-# Fake model calls
-# ----------------------------
-def call_model(model_name: str, input_text: str) -> str:
-    # simulate actual processing with sleep
-    time.sleep(0.1)  # 100ms
-    return f"{model_name} processed: {input_text}"
+    input: Dict[str, str]
 
 # ----------------------------
 # Pipeline Endpoint
 # ----------------------------
 @app.post("/pipeline")
 def run_pipeline(payload: PipelineInput):
-    usage = {"NMT": "0", "LLM": "0", "TTS": "0"}
+    usage = {"NMT": None, "LLM": None, "TTS": None}
     customer = payload.customerName
     appname = payload.customerAppName
     pipeline = PIPELINES.get(customer.lower()) or PIPELINES.get(customer)
-
     if not pipeline:
         raise HTTPException(status_code=400, detail=f"No pipeline defined for customer {customer}")
 
@@ -170,110 +172,145 @@ def run_pipeline(payload: PipelineInput):
     latencies = {}
     pipeline_output = {}
     input_text = payload.input.get("text", "")
-    target_language = payload.input.get("language", "en")  # default English
+    target_language = payload.input.get("language", "en")
 
     start_pipeline = time.time()
+    success = True
 
-    # ---- Step 1: Language Detection ----
-    start = time.time()
-    source_language = detect_language_from_text(input_text)
-    latencies["LangDetection"] = f"{int((time.time() - start) * 1000)}ms"
-    print("Language detection completed: ", source_language)
-
-    # ---- Step 2+: Run customer-specific pipeline ----
-    current_output = input_text
-
-    if "NMT" in pipeline:
+    try:
+        # ---- Language Detection ----
         start = time.time()
-        usage["NMT"] = str(len(current_output))
-        current_output = nmt_service.translate_text(
-            text=current_output,
-            source_lang=source_language,
-            target_lang=target_language
-        )
-        latencies["NMT"] = f"{int((time.time() - start) * 1000)}ms"
-        pipeline_output["NMT"] = current_output["translated_text"]
+        source_language = detect_language_from_text(input_text)
+        latencies["LangDetection"] = f"{int((time.time() - start) * 1000)}ms"
+        duration = time.time() - start
+        # SERVICE_LATENCY.labels(customer, appname, request_id, "LangDetection").observe(duration)
+        # SERVICE_THROUGHPUT.labels(customer, appname, request_id, "LangDetection").inc()
 
-    if "LLM" in pipeline:
-        start = time.time()
-        current_output = llm_service.process_query(current_output)
-        latencies["LLM"] = f"{int((time.time() - start) * 1000)}ms"
-        pipeline_output["LLM"] = current_output["response"]
-        response_data = current_output["response"]
-        print("LLM Output: ", current_output)
-        usage["LLM"] = str(current_output["total_tokens"])
+        current_output = input_text
 
-        #  # Step: Backward NMT (English → original detected language)
-        # start = time.time()
-        # back_translation = nmt_service.translate_text(
-        #     text=current_output["response"],
-        #     source_lang="en",
-        #     target_lang=source_language
-        # )
-        # # latencies["BackNMT"] = f"{int((time.time() - start) * 1000)}ms"
-        # # pipeline_output["BackNMT"] = back_translation["translated_text"]
+        # ---- NMT ----
+        if "NMT" in pipeline:
+            start = time.time()
+            try:
+                usage["NMT"] = str(len(current_output))
+                current_output = nmt_service.translate_text(current_output, source_language, target_language)
+                latencies["NMT"] = f"{int((time.time() - start) * 1000)}ms"
+                pipeline_output["NMT"] = current_output["translated_text"]
 
-        # # Update current_output for TTS
-        # current_output = back_translation["translated_text"]
-        # response_data = current_output
+                duration = time.time() - start
+                # SERVICE_LATENCY.labels(customer, appname, request_id, "NMT").observe(duration)
+                # SERVICE_THROUGHPUT.labels(customer, appname, request_id, "NMT").inc()
+            except Exception:
+                # SERVICE_ERRORS.labels(customer, appname, request_id, "NMT").inc()
+                raise
 
-    if "TTS" in pipeline:
-        start = time.time()
-        print("TTS Input: ", current_output)
-        usage["TTS"] = str(len(current_output["response"]))
-        current_output = tts_service.text_to_speech(current_output["response"], target_language, gender="female")
-        latencies["TTS"] = f"{int((time.time() - start) * 1000)}ms"
-        pipeline_output["TTS"] = current_output["audio_content"]
-        response_data = current_output["audio_content"]
+        # ---- LLM ----
+        if "LLM" in pipeline:
+            start = time.time()
+            try:
+                current_output = llm_service.process_query(current_output)
+                latencies["LLM"] = f"{int((time.time() - start) * 1000)}ms"
+                pipeline_output["LLM"] = current_output["response"]
+                response_data = current_output["response"]
+                usage["LLM"] = str(current_output["total_tokens"])
 
-    # ---- Finalize timings ----
-    total_elapsed = int((time.time() - start_pipeline) * 1000)
-    latencies["pipelineTotal"] = f"{total_elapsed}ms"
+                duration = time.time() - start
+                # SERVICE_LATENCY.labels(customer, appname, request_id, "LLM").observe(duration)
+                # SERVICE_THROUGHPUT.labels(customer, appname, request_id, "LLM").inc()
+            except Exception:
+                # SERVICE_ERRORS.labels(customer, appname, request_id, "LLM").inc()
+                raise
 
-    # responseData = last model’s output
+        # ---- TTS ----
+        if "TTS" in pipeline:
+            start = time.time()
+            try:
+                usage["TTS"] = str(len(current_output["response"]))
+                current_output = tts_service.text_to_speech(current_output["response"], target_language, gender="female")
+                latencies["TTS"] = f"{int((time.time() - start) * 1000)}ms"
+                pipeline_output["TTS"] = current_output["audio_content"]
+                response_data = current_output["audio_content"]
 
-    # ---- Save to DB ----
-    conn = get_connection()
-    cur = conn.cursor()
-    cur.execute(f"""
-        INSERT INTO {TABLE_NAME} 
-        (requestId, customerName, customerApp, langdetectionLatency, nmtLatency, llmLatency, ttsLatency, overallPipelineLatency,
-        nmtUsage, llmUsage, ttsUsage, timestamp)
-        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
-    """, (
-        request_id,
-        customer,
-        appname,
-        latencies.get("LangDetection", ""),
-        latencies.get("NMT", ""),
-        latencies.get("LLM", ""),
-        latencies.get("TTS", ""),
-        latencies.get("pipelineTotal", ""),
-        str(usage.get("NMT", "0")),
-        str(usage.get("LLM", "0")),
-        str(usage.get("TTS", "0")),
-        datetime.now(timezone.utc)
-    ))
+                duration = time.time() - start
+                # SERVICE_LATENCY.labels(customer, appname, request_id, "TTS").observe(duration)
+                # SERVICE_THROUGHPUT.labels(customer, appname, request_id, "TTS").inc()
+            except Exception:
+                # SERVICE_ERRORS.labels(customer, appname, request_id, "TTS").inc()
+                raise
 
-    conn.commit()
-    cur.close()
-    conn.close()
+        # ---- Pipeline total ----
+        total_elapsed = int((time.time() - start_pipeline) * 1000)
+        latencies["pipelineTotal"] = f"{total_elapsed}ms"
+        duration = time.time() - start_pipeline
+        # SERVICE_LATENCY.labels(customer, appname, request_id, "PipelineTotal").observe(duration)
+        # SERVICE_THROUGHPUT.labels(customer, appname, request_id, "PipelineTotal").inc()
 
-    # ---- Return API contract ----
+        # ---- DB Logging ----
+        conn = get_connection()
+        cur = conn.cursor()
+        cur.execute(f"""
+            INSERT INTO {TABLE_NAME} 
+            (requestId, customerName, customerApp, langdetectionLatency, nmtLatency, llmLatency, ttsLatency, overallPipelineLatency,
+            nmtUsage, llmUsage, ttsUsage, timestamp)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+        """, (
+            request_id, customer, appname,
+            latencies.get("LangDetection", None),
+            latencies.get("NMT", None),
+            latencies.get("LLM", None),
+            latencies.get("TTS", None),
+            latencies.get("pipelineTotal", None),
+            str(usage.get("NMT", None)),
+            str(usage.get("LLM", None)),
+            str(usage.get("TTS", None)),
+            datetime.now(timezone.utc)
+        ))
+        conn.commit()
+        cur.close()
+        conn.close()
+
+    except Exception as e:
+        success = False
+        # ERROR_COUNT.labels(customer, appname, request_id).inc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+    finally:
+        duration = time.time() - start_pipeline
+        # REQUEST_LATENCY.labels(customer, appname, request_id).observe(duration)
+        status = "success" if success else "error"
+        # REQUEST_COUNT.labels(customer, appname, request_id, status).inc()
+        # THROUGHPUT.labels(customer, appname, request_id).inc()
+        # CPU_USAGE.set(psutil.cpu_percent())
+        # MEMORY_USAGE.set(psutil.virtual_memory().percent)
+
     return {
         "requestId": request_id,
-        "status": "success",
+        "status": "success" if success else "error",
         "pipelineOutput": pipeline_output,
-        "responseData": response_data,
+        "responseData": response_data if success else None,
         "latency": latencies,
         "usage": usage,
         "timestamp": datetime.now(timezone.utc).isoformat()
     }
 
+# ----------------------------
+# Metrics & DB Endpoints
+# ----------------------------
+# @app.get("/metrics/system")
+# def get_system_metrics():
+#     CPU_USAGE.set(psutil.cpu_percent())
+#     MEMORY_USAGE.set(psutil.virtual_memory().percent)
+#     memory = psutil.virtual_memory()
+#     return {
+#         "cpu_usage_percent": psutil.cpu_percent(),
+#         "memory_usage_bytes": memory.used,
+#         "memory_usage_percent": memory.percent,
+#         "memory_total_bytes": memory.total,
+#         "memory_available_bytes": memory.available
+#     }
 
-# ----------------------------
-# DB Access Endpoints
-# ----------------------------
+# (customers endpoints remain same as in your code)
+
 @app.get("/customers")
 def get_all_customers():
     conn = get_connection()
@@ -327,7 +364,7 @@ def get_customer_aggregates(customerName: str):
         for col in grouped[app_key]:
             val = row.get(col)
             if val is None:
-                grouped[app_key][col].append(0.0)
+                grouped[app_key][col].append(None)
             else:
                 try:
                     # Remove "ms" suffix if exists, convert to float
@@ -337,22 +374,54 @@ def get_customer_aggregates(customerName: str):
                         num = float(val)
                     grouped[app_key][col].append(num)
                 except Exception:
-                    grouped[app_key][col].append(0.0)
+                    grouped[app_key][col].append(None)
 
-    # Compute averages per app
+    # Helpers for mean and percentiles
+    def safe_mean(values):
+        nums = [v for v in values if v is not None]
+        return float(np.mean(nums)) if nums else None
+
+    def safe_percentile(values, q):
+        nums = [v for v in values if v is not None]
+        return float(np.percentile(nums, q)) if nums else None
+
+    # Compute aggregates per app
     aggregates = []
     for app_key, metrics in grouped.items():
         aggregates.append({
             "customerName": customerName,
             "customerApp": app_key,
-            "avg_langdetectionLatency": statistics.mean(metrics["langdetectionlatency"]) if metrics["langdetectionlatency"] else 0.0,
-            "avg_nmtLatency": statistics.mean(metrics["nmtlatency"]) if metrics["nmtlatency"] else 0.0,
-            "avg_llmLatency": statistics.mean(metrics["llmlatency"]) if metrics["llmlatency"] else 0.0,
-            "avg_ttsLatency": statistics.mean(metrics["ttslatency"]) if metrics["ttslatency"] else 0.0,
-            "avg_overallPipelineLatency": statistics.mean(metrics["overallpipelinelatency"]) if metrics["overallpipelinelatency"] else 0.0,
-            "avg_nmtUsage": statistics.mean(metrics["nmtusage"]) if metrics["nmtusage"] else 0.0,
-            "avg_llmUsage": statistics.mean(metrics["llmusage"]) if metrics["llmusage"] else 0.0,
-            "avg_ttsUsage": statistics.mean(metrics["ttsusage"]) if metrics["ttsusage"] else 0.0,
+
+            # Mean
+            "avg_langdetectionLatency": safe_mean(metrics["langdetectionlatency"]),
+            "avg_nmtLatency": safe_mean(metrics["nmtlatency"]),
+            "avg_llmLatency": safe_mean(metrics["llmlatency"]),
+            "avg_ttsLatency": safe_mean(metrics["ttslatency"]),
+            "avg_overallPipelineLatency": safe_mean(metrics["overallpipelinelatency"]),
+            "avg_nmtUsage": safe_mean(metrics["nmtusage"]),
+            "avg_llmUsage": safe_mean(metrics["llmusage"]),
+            "avg_ttsUsage": safe_mean(metrics["ttsusage"]),
+
+            # Percentiles
+            "p90_langdetectionLatency": safe_percentile(metrics["langdetectionlatency"], 90),
+            "p95_langdetectionLatency": safe_percentile(metrics["langdetectionlatency"], 95),
+            "p99_langdetectionLatency": safe_percentile(metrics["langdetectionlatency"], 99),
+
+            "p90_nmtLatency": safe_percentile(metrics["nmtlatency"], 90),
+            "p95_nmtLatency": safe_percentile(metrics["nmtlatency"], 95),
+            "p99_nmtLatency": safe_percentile(metrics["nmtlatency"], 99),
+
+            "p90_llmLatency": safe_percentile(metrics["llmlatency"], 90),
+            "p95_llmLatency": safe_percentile(metrics["llmlatency"], 95),
+            "p99_llmLatency": safe_percentile(metrics["llmlatency"], 99),
+
+            "p90_ttsLatency": safe_percentile(metrics["ttslatency"], 90),
+            "p95_ttsLatency": safe_percentile(metrics["ttslatency"], 95),
+            "p99_ttsLatency": safe_percentile(metrics["ttslatency"], 99),
+
+            "p90_overallPipelineLatency": safe_percentile(metrics["overallpipelinelatency"], 90),
+            "p95_overallPipelineLatency": safe_percentile(metrics["overallpipelinelatency"], 95),
+            "p99_overallPipelineLatency": safe_percentile(metrics["overallpipelinelatency"], 99),
         })
 
     return {
