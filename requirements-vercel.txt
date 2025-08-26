@@ -8,7 +8,4 @@ pydantic==2.11.7
 mangum==0.18.0
 psycopg2-binary
 swagger-ui-py
-prometheus-client 
-prometheus-fastapi-instrumentator
-psutil
 numpy

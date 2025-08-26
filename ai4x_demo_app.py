@@ -4,7 +4,7 @@ import statistics
 import numpy as np
 import psutil
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form
-from prometheus_fastapi_instrumentator import Instrumentator
+# from prometheus_fastapi_instrumentator import Instrumentator
 from fastapi.middleware.cors import CORSMiddleware
 import time
 import uuid

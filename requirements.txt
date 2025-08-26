@@ -7,7 +7,4 @@ aiofiles==24.1.0
 pydantic==2.11.7
 psycopg2-binary
 swagger-ui-py
-prometheus-client 
-prometheus-fastapi-instrumentator
-psutil
 numpy
