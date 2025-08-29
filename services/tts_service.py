@@ -50,7 +50,7 @@ class TTSService:
             # loop = asyncio.get_event_loop()
             service_id = "ai4bharat/indic-tts-dravidian--gpu-t4" if language in ["ta", "te", "kn", "nl"] else "ai4bharat/indic-tts-indo-aryan--gpu-t4"
             response = requests.post(
-                    f"{self.tts_url}?serviceId={self.service_id}",
+                    f"{self.tts_url}?serviceId={service_id}",
                     headers=self.headers, 
                     json=payload, 
                     timeout=30
@@ -130,7 +130,7 @@ class TTSService:
             service_id = "ai4bharat/indic-tts-dravidian--gpu-t4" if language in ["ta", "te", "kn", "nl"] else "ai4bharat/indic-tts-indo-aryan--gpu-t4"
             # loop = asyncio.get_event_loop()
             response = requests.post(
-                    f"{self.tts_url}?serviceId={self.service_id}",
+                    f"{self.tts_url}?serviceId={service_id}",
                     headers=self.headers, 
                     json=payload, 
                     timeout=60

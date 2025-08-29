@@ -37,7 +37,7 @@ llm_service = LLMService()
 tts_service = TTSService()
 weather_service = WeatherService()
 
-TABLE_NAME = "ai4x_demo_requests_log_v4"
+TABLE_NAME = "ai4x_demo_requests_log_v6"
 
 # ----------------------------
 # Pipeline-level Prometheus Metrics
@@ -125,10 +125,12 @@ def init_db():
             langdetectionLatency TEXT,
             nmtLatency TEXT,
             llmLatency TEXT,
+            backNMTLatency TEXT,
             ttsLatency TEXT,
             overallPipelineLatency TEXT,
             nmtUsage TEXT,
             llmUsage TEXT,
+            backNMTUsage TEXT,
             ttsUsage TEXT,
             timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
@@ -160,7 +162,7 @@ class PipelineInput(BaseModel):
 # ----------------------------
 @app.post("/pipeline")
 def run_pipeline(payload: PipelineInput):
-    usage = {"NMT": None, "LLM": None, "TTS": None}
+    usage = {"NMT": None, "LLM": None, "TTS": None, "backNMT": None}
     customer = payload.customerName
     appname = payload.customerAppName
     pipeline = PIPELINES.get(customer.lower()) or PIPELINES.get(customer)
@@ -214,6 +216,20 @@ def run_pipeline(payload: PipelineInput):
                 usage["LLM"] = str(current_output["total_tokens"])
 
                 duration = time.time() - start
+                # Step: Backward NMT (English → original detected language)
+                start = time.time()
+                usage["backNMT"] = str(len(current_output["response"]))
+                back_translation = nmt_service.translate_text(
+                    text=current_output["response"],
+                    source_lang="en",
+                    target_lang=source_language
+                )
+                latencies["BackNMT"] = f"{int((time.time() - start) * 1000)}ms"
+                pipeline_output["BackNMT"] = back_translation["translated_text"]
+
+                # Update current_output for TTS
+                current_output = back_translation["translated_text"]
+                response_data = current_output
                 # SERVICE_LATENCY.labels(customer, appname, request_id, "LLM").observe(duration)
                 # SERVICE_THROUGHPUT.labels(customer, appname, request_id, "LLM").inc()
             except Exception:
@@ -224,8 +240,8 @@ def run_pipeline(payload: PipelineInput):
         if "TTS" in pipeline:
             start = time.time()
             try:
-                usage["TTS"] = str(len(current_output["response"]))
-                current_output = tts_service.text_to_speech(current_output["response"], target_language, gender="female")
+                usage["TTS"] = str(len(response_data))
+                current_output = tts_service.text_to_speech(response_data, source_language, gender="female")
                 latencies["TTS"] = f"{int((time.time() - start) * 1000)}ms"
                 pipeline_output["TTS"] = current_output["audio_content"]
                 response_data = current_output["audio_content"]
@@ -249,18 +265,20 @@ def run_pipeline(payload: PipelineInput):
         cur = conn.cursor()
         cur.execute(f"""
             INSERT INTO {TABLE_NAME} 
-            (requestId, customerName, customerApp, langdetectionLatency, nmtLatency, llmLatency, ttsLatency, overallPipelineLatency,
-            nmtUsage, llmUsage, ttsUsage, timestamp)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            (requestId, customerName, customerApp, langdetectionLatency, nmtLatency, llmLatency, backNMTLatency, ttsLatency, overallPipelineLatency,
+            nmtUsage, llmUsage, backNMTUsage, ttsUsage, timestamp)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
         """, (
             request_id, customer, appname,
             latencies.get("LangDetection", None),
             latencies.get("NMT", None),
             latencies.get("LLM", None),
+            latencies.get("BackNMT", None),
             latencies.get("TTS", None),
             latencies.get("pipelineTotal", None),
             str(usage.get("NMT", None)),
             str(usage.get("LLM", None)),
+            str(usage.get("backNMT", None)),
             str(usage.get("TTS", None)),
             datetime.now(timezone.utc)
         ))
@@ -338,8 +356,8 @@ def get_customer_aggregates(customerName: str):
 
     cur.execute(f"""
         SELECT customerName, customerApp,
-               langdetectionLatency, nmtLatency, llmLatency, ttsLatency, overallPipelineLatency,
-               nmtUsage, llmUsage, ttsUsage
+               langdetectionLatency, nmtLatency, llmLatency, backNMTLatency, ttsLatency, overallPipelineLatency,
+               nmtUsage, llmUsage, backNMTUsage, ttsUsage
         FROM {TABLE_NAME}
         WHERE customerName = %s
     """, (customerName,))
@@ -357,8 +375,8 @@ def get_customer_aggregates(customerName: str):
         app_key = row["customerapp"]
         if app_key not in grouped:
             grouped[app_key] = {k: [] for k in [
-                "langdetectionlatency", "nmtlatency", "llmlatency", "ttslatency", "overallpipelinelatency",
-                "nmtusage", "llmusage", "ttsusage"
+                "langdetectionlatency", "nmtlatency", "llmlatency", "backnmtlatency", "ttslatency", "overallpipelinelatency",
+                "nmtusage", "llmusage", "backnmtusage", "ttsusage"
             ]}
         for col in grouped[app_key]:
             val = row.get(col)
@@ -395,10 +413,12 @@ def get_customer_aggregates(customerName: str):
             "avg_langdetectionLatency": safe_mean(metrics["langdetectionlatency"]),
             "avg_nmtLatency": safe_mean(metrics["nmtlatency"]),
             "avg_llmLatency": safe_mean(metrics["llmlatency"]),
+            "avg_backNMTLatency": safe_mean(metrics["backnmtlatency"]),
             "avg_ttsLatency": safe_mean(metrics["ttslatency"]),
             "avg_overallPipelineLatency": safe_mean(metrics["overallpipelinelatency"]),
             "avg_nmtUsage": safe_mean(metrics["nmtusage"]),
             "avg_llmUsage": safe_mean(metrics["llmusage"]),
+            "avg_backNMTUsage": safe_mean(metrics["backnmtusage"]),
             "avg_ttsUsage": safe_mean(metrics["ttsusage"]),
 
             # Percentiles
@@ -414,6 +434,10 @@ def get_customer_aggregates(customerName: str):
             "p95_llmLatency": safe_percentile(metrics["llmlatency"], 95),
             "p99_llmLatency": safe_percentile(metrics["llmlatency"], 99),
 
+            "p90_backNMTLatency": safe_percentile(metrics["backnmtlatency"], 90),
+            "p95_backNMTLatency": safe_percentile(metrics["backnmtlatency"], 95),
+            "p99_backNMTLatency": safe_percentile(metrics["backnmtlatency"], 99),
+
             "p90_ttsLatency": safe_percentile(metrics["ttslatency"], 90),
             "p95_ttsLatency": safe_percentile(metrics["ttslatency"], 95),
             "p99_ttsLatency": safe_percentile(metrics["ttslatency"], 99),
@@ -427,3 +451,124 @@ def get_customer_aggregates(customerName: str):
         "customerName": customerName,
         "aggregates": aggregates
     }
+
+
+
+@app.get("/metrics/requests")
+def get_request_metrics():
+    """
+    Returns request volume and API call counts:
+    - Total number of API calls
+    - API calls split by service (TTS, NMT, LLM, backNMT)
+    - Customer-wise counts (total + per service)
+    """
+    conn = get_connection()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+
+    # Fetch all requests
+    cur.execute(f"""
+        SELECT customerName, 
+               (nmtLatency IS NOT NULL) AS hasNMT,
+               (llmLatency IS NOT NULL) AS hasLLM,
+               (ttsLatency IS NOT NULL) AS hasTTS,
+               (backNMTLatency IS NOT NULL) AS hasBackNMT
+        FROM {TABLE_NAME}
+    """)
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
+
+    total_requests = len(rows)
+    service_counts = {"NMT": 0, "LLM": 0, "TTS": 0, "backNMT": 0}
+    customer_requests = {}
+
+    for row in rows:
+        cust = row["customername"]
+
+        # Initialize per-customer dict if first time
+        if cust not in customer_requests:
+            customer_requests[cust] = {
+                "total": 0,
+                "by_service": {"NMT": 0, "LLM": 0, "TTS": 0, "backNMT": 0}
+            }
+
+        # Increment totals
+        customer_requests[cust]["total"] += 1
+
+        if row["hasnmt"]:
+            service_counts["NMT"] += 1
+            customer_requests[cust]["by_service"]["NMT"] += 1
+        if row["hasllm"]:
+            service_counts["LLM"] += 1
+            customer_requests[cust]["by_service"]["LLM"] += 1
+        if row["hastts"]:
+            service_counts["TTS"] += 1
+            customer_requests[cust]["by_service"]["TTS"] += 1
+        if row["hasbacknmt"]:
+            service_counts["backNMT"] += 1
+            customer_requests[cust]["by_service"]["backNMT"] += 1
+
+    return {
+        "total_requests": total_requests,
+        "requests_by_service": service_counts,
+        "requests_by_customer": customer_requests
+    }
+
+
+
+@app.get("/metrics/data_processed")
+def get_data_processed_metrics():
+    """
+    Returns data processed metrics:
+    - NMT = total characters translated
+    - TTS = total characters synthesized
+    - LLM = total input tokens
+    - backNMT = total characters back-translated
+    Both total and customer-wise
+    """
+    conn = get_connection()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+
+    cur.execute(f"""
+        SELECT customerName,
+               nmtUsage, llmUsage, ttsUsage, backNMTUsage
+        FROM {TABLE_NAME}
+    """)
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
+
+    totals = {"NMT_chars": 0, "LLM_tokens": 0, "TTS_chars": 0, "backNMT_chars": 0}
+    customers = {}
+
+    for row in rows:
+        cust = row["customername"]
+        if cust not in customers:
+            customers[cust] = {"NMT_chars": 0, "LLM_tokens": 0, "TTS_chars": 0, "backNMT_chars": 0}
+
+        def add_safe(val):
+            try:
+                return int(val) if val not in (None, "None") else 0
+            except:
+                return 0
+
+        nmt = add_safe(row["nmtusage"])
+        llm = add_safe(row["llmusage"])
+        tts = add_safe(row["ttsusage"])
+        backnmt = add_safe(row["backnmtusage"])
+
+        customers[cust]["NMT_chars"] += nmt
+        customers[cust]["LLM_tokens"] += llm
+        customers[cust]["TTS_chars"] += tts
+        customers[cust]["backNMT_chars"] += backnmt
+
+        totals["NMT_chars"] += nmt
+        totals["LLM_tokens"] += llm
+        totals["TTS_chars"] += tts
+        totals["backNMT_chars"] += backnmt
+
+    return {
+        "totals": totals,
+        "byCustomer": customers
+    }
+
