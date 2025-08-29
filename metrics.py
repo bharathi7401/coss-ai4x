@@ -89,6 +89,54 @@ THROUGHPUT = Gauge(
     registry=REGISTRY
 )
 
+# Data processing metrics
+DATA_PROCESSED_TOTAL = Counter(
+    'ai4x_data_processed_total',
+    'Total data processed by type',
+    ['data_type', 'customer', 'app'],
+    registry=REGISTRY
+)
+
+# Service-specific metrics
+SERVICE_REQUESTS = Counter(
+    'ai4x_service_requests_total',
+    'Total requests by service type',
+    ['service', 'customer', 'app'],
+    registry=REGISTRY
+)
+
+# NMT specific metrics
+NMT_CHARACTERS_TRANSLATED = Counter(
+    'ai4x_nmt_characters_translated_total',
+    'Total characters translated by NMT',
+    ['customer', 'app', 'source_lang', 'target_lang'],
+    registry=REGISTRY
+)
+
+# TTS specific metrics
+TTS_CHARACTERS_SYNTHESIZED = Counter(
+    'ai4x_tts_characters_synthesized_total',
+    'Total characters synthesized by TTS',
+    ['customer', 'app', 'language'],
+    registry=REGISTRY
+)
+
+# ASR specific metrics
+ASR_AUDIO_MINUTES_PROCESSED = Counter(
+    'ai4x_asr_audio_minutes_processed_total',
+    'Total audio minutes processed by ASR',
+    ['customer', 'app', 'language'],
+    registry=REGISTRY
+)
+
+# LLM specific metrics
+LLM_TOKENS_PROCESSED = Counter(
+    'ai4x_llm_tokens_processed_total',
+    'Total tokens processed by LLM',
+    ['customer', 'app', 'model'],
+    registry=REGISTRY
+)
+
 class MetricsCollector:
     def __init__(self):
         self.request_times = {}
@@ -249,14 +297,70 @@ class MetricsCollector:
             component=component
         ).inc()
     
-    def record_empty_response(self, customer: str, app: str, component: str):
-        """Record an empty response error"""
-        ERROR_COUNT.labels(
+    def record_service_request(self, service: str, customer: str, app: str):
+        """Record a service-specific request"""
+        SERVICE_REQUESTS.labels(service=service, customer=customer, app=app).inc()
+
+    def record_nmt_translation(self, customer: str, app: str, source_lang: str, target_lang: str, char_count: int):
+        """Record NMT translation metrics"""
+        NMT_CHARACTERS_TRANSLATED.labels(
             customer=customer,
             app=app,
-            error_type='empty_response',
-            component=component
-        ).inc()
+            source_lang=source_lang,
+            target_lang=target_lang
+        ).inc(char_count)
+
+        # Also record as general data processing
+        DATA_PROCESSED_TOTAL.labels(
+            data_type='nmt_characters',
+            customer=customer,
+            app=app
+        ).inc(char_count)
+
+    def record_tts_synthesis(self, customer: str, app: str, language: str, char_count: int):
+        """Record TTS synthesis metrics"""
+        TTS_CHARACTERS_SYNTHESIZED.labels(
+            customer=customer,
+            app=app,
+            language=language
+        ).inc(char_count)
+
+        # Also record as general data processing
+        DATA_PROCESSED_TOTAL.labels(
+            data_type='tts_characters',
+            customer=customer,
+            app=app
+        ).inc(char_count)
+
+    def record_asr_processing(self, customer: str, app: str, language: str, audio_minutes: float):
+        """Record ASR processing metrics"""
+        ASR_AUDIO_MINUTES_PROCESSED.labels(
+            customer=customer,
+            app=app,
+            language=language
+        ).inc(audio_minutes)
+
+        # Also record as general data processing
+        DATA_PROCESSED_TOTAL.labels(
+            data_type='asr_minutes',
+            customer=customer,
+            app=app
+        ).inc(audio_minutes)
+
+    def record_llm_processing(self, customer: str, app: str, model: str, token_count: int):
+        """Record LLM processing metrics"""
+        LLM_TOKENS_PROCESSED.labels(
+            customer=customer,
+            app=app,
+            model=model
+        ).inc(token_count)
+
+        # Also record as general data processing
+        DATA_PROCESSED_TOTAL.labels(
+            data_type='llm_tokens',
+            customer=customer,
+            app=app
+        ).inc(token_count)
 
 # Global metrics collector instance
 metrics_collector = MetricsCollector()

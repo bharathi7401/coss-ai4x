@@ -218,6 +218,16 @@ def run_pipeline(payload: PipelineInput):
             pipeline_output["NMT"] = current_output["translated_text"]
             metrics_collector.end_component(request_id_metrics, "NMT", True)
 
+            # Record NMT metrics
+            metrics_collector.record_service_request("nmt", customer, appname)
+            metrics_collector.record_nmt_translation(
+                customer=customer,
+                app=appname,
+                source_lang=source_language,
+                target_lang=target_language,
+                char_count=len(input_text)
+            )
+
         if "LLM" in pipeline:
             metrics_collector.start_component(request_id_metrics, "LLM")
             start = time.time()
@@ -229,6 +239,15 @@ def run_pipeline(payload: PipelineInput):
             usage["LLM"] = str(current_output["total_tokens"])
             metrics_collector.end_component(request_id_metrics, "LLM", True)
 
+            # Record LLM metrics
+            metrics_collector.record_service_request("llm", customer, appname)
+            metrics_collector.record_llm_processing(
+                customer=customer,
+                app=appname,
+                model="gemini",  # or extract from service
+                token_count=current_output["total_tokens"]
+            )
+
         if "TTS" in pipeline:
             metrics_collector.start_component(request_id_metrics, "TTS")
             start = time.time()
@@ -239,6 +258,15 @@ def run_pipeline(payload: PipelineInput):
             pipeline_output["TTS"] = current_output["audio_content"]
             response_data = current_output["audio_content"]
             metrics_collector.end_component(request_id_metrics, "TTS", True)
+
+            # Record TTS metrics
+            metrics_collector.record_service_request("tts", customer, appname)
+            metrics_collector.record_tts_synthesis(
+                customer=customer,
+                app=appname,
+                language=target_language,
+                char_count=len(current_output["response"])
+            )
 
         # ---- Finalize timings ----
         total_elapsed = int((time.time() - start_pipeline) * 1000)
@@ -391,3 +419,7 @@ def get_customer_aggregates(customerName: str):
         "customerName": customerName,
         "aggregates": aggregates
     }
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
