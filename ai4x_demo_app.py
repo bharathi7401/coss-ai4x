@@ -252,11 +252,14 @@ def run_pipeline(payload: PipelineInput):
             metrics_collector.start_component(request_id_metrics, "TTS")
             start = time.time()
             print("TTS Input: ", current_output)
-            usage["TTS"] = str(len(current_output["response"]))
-            current_output = tts_service.text_to_speech(current_output["response"], target_language, gender="female")
+            # Get text to convert from current_output (which could be LLM response dict or plain text)
+            tts_text = current_output["response"] if isinstance(current_output, dict) and "response" in current_output else str(current_output)
+            usage["TTS"] = str(len(tts_text))
+            tts_result = tts_service.text_to_speech(tts_text, target_language, gender="female")
             latencies["TTS"] = f"{int((time.time() - start) * 1000)}ms"
-            pipeline_output["TTS"] = current_output["audio_content"]
-            response_data = current_output["audio_content"]
+            pipeline_output["TTS"] = tts_result.get("audio_content", "")
+            response_data = tts_result.get("audio_content", "")
+            current_output = tts_result
             metrics_collector.end_component(request_id_metrics, "TTS", True)
 
             # Record TTS metrics
@@ -265,7 +268,7 @@ def run_pipeline(payload: PipelineInput):
                 customer=customer,
                 app=appname,
                 language=target_language,
-                char_count=len(current_output["response"])
+                char_count=len(tts_text)
             )
 
         # ---- Finalize timings ----
