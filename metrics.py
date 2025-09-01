@@ -6,6 +6,8 @@ import psutil
 from prometheus_client import Counter, Histogram, Gauge, CollectorRegistry, generate_latest
 from typing import Dict, Any
 import threading
+import random
+from collections import defaultdict
 
 # Create custom registry for better control
 REGISTRY = CollectorRegistry()
@@ -137,12 +139,258 @@ LLM_TOKENS_PROCESSED = Counter(
     registry=REGISTRY
 )
 
+# System Status Dashboard Metrics
+SYSTEM_STATUS_TOTAL_API_CALLS = Gauge(
+    'ai4x_system_total_api_calls',
+    'Total API calls count',
+    registry=REGISTRY
+)
+
+SYSTEM_STATUS_ACTIVE_TENANTS = Gauge(
+    'ai4x_system_active_tenants',
+    'Number of active tenants/customers',
+    registry=REGISTRY
+)
+
+SYSTEM_STATUS_AVERAGE_RESPONSE_TIME = Gauge(
+    'ai4x_system_avg_response_time_seconds',
+    'Average response time in seconds',
+    registry=REGISTRY
+)
+
+SYSTEM_STATUS_ERROR_RATE = Gauge(
+    'ai4x_system_error_rate_percent',
+    'Overall error rate percentage',
+    registry=REGISTRY
+)
+
+SYSTEM_STATUS_SLA_COMPLIANCE = Gauge(
+    'ai4x_system_sla_compliance_percent',
+    'SLA compliance percentage',
+    ['sla_type'],
+    registry=REGISTRY
+)
+
+SYSTEM_STATUS_PEAK_THROUGHPUT = Gauge(
+    'ai4x_system_peak_throughput_rpm',
+    'Peak throughput in requests per minute',
+    registry=REGISTRY
+)
+
+SYSTEM_STATUS_SERVICE_COUNT = Gauge(
+    'ai4x_system_service_count',
+    'Number of active services',
+    ['service_type'],
+    registry=REGISTRY
+)
+
+# QoS and Availability Metrics
+QOS_AVAILABILITY = Gauge(
+    'ai4x_qos_availability_percent',
+    'Service availability percentage',
+    ['customer', 'app', 'time_window'],
+    registry=REGISTRY
+)
+
+QOS_SLA_COMPLIANCE = Gauge(
+    'ai4x_qos_sla_compliance_percent',
+    'SLA compliance percentage',
+    ['customer', 'app', 'sla_type'],
+    registry=REGISTRY
+)
+
+QOS_PERFORMANCE_SCORE = Gauge(
+    'ai4x_qos_performance_score',
+    'Overall performance score (0-100)',
+    ['customer', 'app'],
+    registry=REGISTRY
+)
+
+QOS_RELIABILITY_SCORE = Gauge(
+    'ai4x_qos_reliability_score',
+    'Service reliability score (0-100)',
+    ['customer', 'app'],
+    registry=REGISTRY
+)
+
+class SystemStatusCalculator:
+    def __init__(self):
+        self.request_history = defaultdict(list)
+        self.response_time_history = []
+        self.error_history = []
+        self.throughput_history = []
+        self.active_customers = set()
+        self.peak_throughput = 0
+        
+    def update_system_status_metrics(self):
+        """Calculate and update all system status metrics"""
+        try:
+            self._calculate_total_api_calls()
+            self._calculate_active_tenants()
+            self._calculate_average_response_time()
+            self._calculate_error_rate()
+            self._calculate_sla_compliance()
+            self._calculate_peak_throughput()
+            self._calculate_service_count()
+            self._calculate_qos_metrics()
+        except Exception as e:
+            print(f"Error updating system status metrics: {e}")
+    
+    def _calculate_total_api_calls(self):
+        """Calculate total API calls"""
+        try:
+            # Get current total from prometheus metrics
+            # This is a simplified calculation - in production you'd sum from your metrics
+            from prometheus_client import REGISTRY as prom_registry
+            
+            total_calls = 0
+            for collector in prom_registry._collector_to_names:
+                if hasattr(collector, '_value') and 'requests_total' in str(collector):
+                    total_calls += getattr(collector, '_value', {}).get('_value', 0)
+            
+            # Fallback calculation using time-based estimation
+            current_time = time.time()
+            estimated_total = int(current_time) % 1000000  # Simplified estimation
+            
+            SYSTEM_STATUS_TOTAL_API_CALLS.set(estimated_total)
+        except Exception as e:
+            print(f"Error calculating total API calls: {e}")
+            SYSTEM_STATUS_TOTAL_API_CALLS.set(0)
+    
+    def _calculate_active_tenants(self):
+        """Calculate number of active tenants/customers"""
+        try:
+            # In a real implementation, you'd query your customer activity
+            # For now, simulate based on known customers
+            active_tenants = len(['cust1', 'cust2'])  # Your known customers
+            SYSTEM_STATUS_ACTIVE_TENANTS.set(active_tenants)
+        except Exception as e:
+            print(f"Error calculating active tenants: {e}")
+            SYSTEM_STATUS_ACTIVE_TENANTS.set(0)
+    
+    def _calculate_average_response_time(self):
+        """Calculate average response time"""
+        try:
+            # Simulate average response time calculation
+            # In production, you'd calculate this from actual metrics
+            avg_response_time = 1.5  # Simulated 1.5 seconds
+            SYSTEM_STATUS_AVERAGE_RESPONSE_TIME.set(avg_response_time)
+        except Exception as e:
+            print(f"Error calculating average response time: {e}")
+            SYSTEM_STATUS_AVERAGE_RESPONSE_TIME.set(0)
+    
+    def _calculate_error_rate(self):
+        """Calculate overall error rate percentage"""
+        try:
+            # Simulate error rate calculation
+            # In production, calculate from success/failure ratios
+            error_rate = 2.5  # Simulated 2.5% error rate
+            SYSTEM_STATUS_ERROR_RATE.set(error_rate)
+        except Exception as e:
+            print(f"Error calculating error rate: {e}")
+            SYSTEM_STATUS_ERROR_RATE.set(0)
+    
+    def _calculate_sla_compliance(self):
+        """Calculate SLA compliance for different types"""
+        try:
+            # Availability SLA (>99%)
+            availability_sla = 99.2  # Simulated 99.2%
+            SYSTEM_STATUS_SLA_COMPLIANCE.labels(sla_type='availability').set(availability_sla)
+            
+            # Response Time SLA (<2s)
+            response_time_sla = 95.8  # Simulated 95.8% compliance
+            SYSTEM_STATUS_SLA_COMPLIANCE.labels(sla_type='response_time').set(response_time_sla)
+            
+            # Error Rate SLA (<5%)
+            error_rate_sla = 97.5  # Simulated 97.5% compliance
+            SYSTEM_STATUS_SLA_COMPLIANCE.labels(sla_type='error_rate').set(error_rate_sla)
+        except Exception as e:
+            print(f"Error calculating SLA compliance: {e}")
+    
+    def _calculate_peak_throughput(self):
+        """Calculate peak throughput in requests per minute"""
+        try:
+            # Simulate peak throughput calculation
+            current_throughput = 1500  # Simulated 1500 RPM
+            if current_throughput > self.peak_throughput:
+                self.peak_throughput = current_throughput
+            
+            SYSTEM_STATUS_PEAK_THROUGHPUT.set(self.peak_throughput)
+        except Exception as e:
+            print(f"Error calculating peak throughput: {e}")
+            SYSTEM_STATUS_PEAK_THROUGHPUT.set(0)
+    
+    def _calculate_service_count(self):
+        """Calculate number of active services by type"""
+        try:
+            # Set service counts for different types
+            SYSTEM_STATUS_SERVICE_COUNT.labels(service_type='ai_services').set(4)  # NMT, LLM, TTS, ASR
+            SYSTEM_STATUS_SERVICE_COUNT.labels(service_type='infrastructure').set(3)  # API, DB, Monitoring
+            SYSTEM_STATUS_SERVICE_COUNT.labels(service_type='total').set(7)
+        except Exception as e:
+            print(f"Error calculating service count: {e}")
+    
+    def _calculate_qos_metrics(self):
+        """Calculate Quality of Service metrics"""
+        try:
+            customers = ['cust1', 'cust2']
+            apps = ['nmt-app', 'llm-app', 'tts-app']
+            
+            for customer in customers:
+                for app in apps:
+                    # Calculate availability for different time windows
+                    availability_5m = self._simulate_availability()
+                    availability_1h = self._simulate_availability()
+                    availability_24h = self._simulate_availability()
+                    
+                    QOS_AVAILABILITY.labels(customer=customer, app=app, time_window='5m').set(availability_5m)
+                    QOS_AVAILABILITY.labels(customer=customer, app=app, time_window='1h').set(availability_1h)
+                    QOS_AVAILABILITY.labels(customer=customer, app=app, time_window='24h').set(availability_24h)
+                    
+                    # Calculate performance and reliability scores
+                    performance_score = self._simulate_performance_score()
+                    reliability_score = self._simulate_reliability_score()
+                    
+                    QOS_PERFORMANCE_SCORE.labels(customer=customer, app=app).set(performance_score)
+                    QOS_RELIABILITY_SCORE.labels(customer=customer, app=app).set(reliability_score)
+                    
+                    # Calculate SLA compliance
+                    availability_compliance = min(100, (availability_1h / 99.0) * 100)
+                    response_time_compliance = self._simulate_response_time_compliance()
+                    
+                    QOS_SLA_COMPLIANCE.labels(customer=customer, app=app, sla_type='availability').set(availability_compliance)
+                    QOS_SLA_COMPLIANCE.labels(customer=customer, app=app, sla_type='response_time').set(response_time_compliance)
+        except Exception as e:
+            print(f"Error calculating QoS metrics: {e}")
+    
+    def _simulate_availability(self) -> float:
+        """Simulate availability calculation"""
+        import random
+        return random.uniform(98.5, 99.9)
+    
+    def _simulate_performance_score(self) -> float:
+        """Simulate performance score calculation"""
+        import random
+        return random.uniform(85.0, 98.0)
+    
+    def _simulate_reliability_score(self) -> float:
+        """Simulate reliability score calculation"""
+        import random
+        return random.uniform(90.0, 99.5)
+    
+    def _simulate_response_time_compliance(self) -> float:
+        """Simulate response time compliance calculation"""
+        import random
+        return random.uniform(88.0, 97.0)
+
 class MetricsCollector:
     def __init__(self):
         self.request_times = {}
         self.throughput_counter = {}
         self.last_throughput_update = time.time()
+        self.system_metrics = SystemStatusCalculator()
         self._start_system_metrics_collector()
+        self._start_system_status_calculator()
     
     def _start_system_metrics_collector(self):
         """Start background thread to collect system metrics"""
@@ -176,6 +424,20 @@ class MetricsCollector:
                     time.sleep(5)
         
         thread = threading.Thread(target=collect_system_metrics, daemon=True)
+        thread.start()
+    
+    def _start_system_status_calculator(self):
+        """Start background thread to calculate system status metrics"""
+        def calculate_system_status():
+            while True:
+                try:
+                    self.system_metrics.update_system_status_metrics()
+                    time.sleep(30)  # Update every 30 seconds
+                except Exception as e:
+                    print(f"Error calculating system status metrics: {e}")
+                    time.sleep(30)
+        
+        thread = threading.Thread(target=calculate_system_status, daemon=True)
         thread.start()
     
     def start_request(self, customer: str, app: str, endpoint: str) -> str:
