@@ -7,25 +7,19 @@ scrape_configs:
   # AI4X application metrics
   - job_name: 'ai4x-app'
     static_configs:
-      - targets: ['localhost:8000']  # Update with your app's address
+      - targets: ['ai4x-app:8000']  # Update with your app's address
     metrics_path: '/metrics'
     scrape_interval: 5s
-    scrape_timeout: 5s
-    
-  # Node exporter for system metrics (if installed)
-  - job_name: 'node-exporter'
-    static_configs:
-      - targets: ['localhost:9100']  # Standard node exporter port
-    scrape_interval: 10s
+    # scrape_timeout: 5s
     
   # Prometheus itself
   - job_name: 'prometheus'
     static_configs:
-      - targets: ['localhost:9090']
+      - targets: ['prometheus:9090']
     scrape_interval: 10s
 
 # Rule files for alerting (optional)
-rule_files:
+# rule_files:
   # - "alert_rules.yml"
 
 # Alerting configuration (optional)

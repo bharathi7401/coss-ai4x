@@ -10,3 +10,4 @@ swagger-ui-py
 prometheus-client==0.20.0
 prometheus-fastapi-instrumentator==7.0.0
 psutil==5.9.8
+numpy

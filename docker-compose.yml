@@ -1,0 +1,24 @@
+version: "3.7"
+services:
+  ai4x-app:
+    build: .
+    container_name: ai4x-app
+    ports:
+      - "8000:8000"   # expose to host for debugging if needed
+    volumes:
+      - ./ai4x_demo_app.py:/app/ai4x_demo_app.py
+      - ./requirements.txt:/app/requirements.txt
+
+  prometheus:
+    image: prom/prometheus
+    container_name: prometheus
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090"
+
+  grafana:
+    image: grafana/grafana
+    container_name: grafana
+    ports:
+      - "3000:3000"
