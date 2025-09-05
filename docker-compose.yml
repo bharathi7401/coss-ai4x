@@ -21,7 +21,7 @@ services:
       - "--web.enable-lifecycle"
     volumes:
       - ./prometheus-new.yml:/etc/prometheus/prometheus.yml
-      - ./prometheus-data-new:/prometheus   # separate folder
+      - prometheus-data-new:/prometheus   # separate folder
 
   grafana-new:
     image: grafana/grafana
@@ -32,7 +32,7 @@ services:
       - GF_SECURITY_ADMIN_USER=admin
       - GF_SECURITY_ADMIN_PASSWORD=admin
     volumes:
-      - ./grafana-data-new:/var/lib/grafana   # separate folder
+      - grafana-data-new:/var/lib/grafana   # separate folder
     depends_on:
       - prometheus-new
 
@@ -46,3 +46,7 @@ services:
     depends_on:
       - ai4x-app-new
     restart: unless-stopped
+
+volumes:
+  prometheus-data-new:
+  grafana-data-new:
