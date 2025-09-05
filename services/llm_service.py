@@ -11,7 +11,7 @@ class LLMService:
     def __init__(self):
         # Configure Gemini API
         # Note: Replace with your actual API key
-        genai.configure(api_key="AIzaSyB-ppjEE4BuEbudwNCD89Hl09kVqU2tg20")
+        genai.configure(api_key="AIzaSyCrTBHocgDOczHlzZlj0eS3O-0t9dwtVuQ")
         
         # Configure model - Google Search is available through the API automatically
         self.model = genai.GenerativeModel('gemini-2.0-flash')
