@@ -35,3 +35,14 @@ services:
       - ./grafana-data-new:/var/lib/grafana   # separate folder
     depends_on:
       - prometheus-new
+
+  request-sender:
+    build: .
+    container_name: request-sender
+    volumes:
+      - ./request_sender.py:/app/request_sender.py
+      - ./sample_requests.json:/app/sample_requests.json
+    command: python request_sender.py --url http://ai4x-app-new:8000 --mode continuous --interval-min 3 --interval-max 8 --wait-startup 15
+    depends_on:
+      - ai4x-app-new
+    restart: unless-stopped
