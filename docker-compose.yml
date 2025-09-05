@@ -1,24 +1,37 @@
 version: "3.7"
+
 services:
-  ai4x-app:
+  ai4x-app-new:
     build: .
-    container_name: ai4x-app
+    container_name: ai4x-app-new
     ports:
-      - "8000:8000"   # expose to host for debugging if needed
+      - "8100:8000"   # new host port → container still listens on 8000
     volumes:
       - ./ai4x_demo_app.py:/app/ai4x_demo_app.py
       - ./requirements.txt:/app/requirements.txt
 
-  prometheus:
+  prometheus-new:
     image: prom/prometheus
-    container_name: prometheus
+    container_name: prometheus-new
+    ports:
+      - "9190:9090"   # host port 9190 → container port 9090
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.enable-lifecycle"
     volumes:
-      - ./prometheus.yml:/etc/prometheus/prometheus.yml
-    ports:
-      - "9090:9090"
+      - ./prometheus-new.yml:/etc/prometheus/prometheus.yml
+      - ./prometheus-data-new:/prometheus   # separate folder
 
-  grafana:
+  grafana-new:
     image: grafana/grafana
-    container_name: grafana
+    container_name: grafana-new
     ports:
-      - "3000:3000"
+      - "3100:3000"   # host port 3100 → container port 3000
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - ./grafana-data-new:/var/lib/grafana   # separate folder
+    depends_on:
+      - prometheus-new

@@ -1,0 +1,18 @@
+# Prometheus configuration for AI4X monitoring (new environment)
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  # AI4X application metrics
+  - job_name: 'ai4x-app-new'
+    static_configs:
+      - targets: ['ai4x-app-new:8000']  # container name + internal port
+    metrics_path: '/metrics'
+    scrape_interval: 5s
+    
+  # Prometheus itself
+  - job_name: 'prometheus-new'
+    static_configs:
+      - targets: ['prometheus-new:9090']  # container name + internal port
+    scrape_interval: 10s
