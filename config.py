@@ -9,7 +9,7 @@ class Config:
     ASR_API_BASE = "https://13.203.149.17/services/inference"
     
     # Gemini API Configuration
-    GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "AIzaSyAIa1S7VQ11MHt5X_61JQRZRrcZxPFbhE8")
+    GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "AIzaSyCrTBHocgDOczHlzZlj0eS3O-0t9dwtVuQ")
     
     # Weather API Configuration
     OPENWEATHER_API_KEY = os.getenv("OPENWEATHER_API_KEY", "43b2332aa4ee916c75f08f7fcaa3f0ea")

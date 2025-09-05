@@ -2,7 +2,7 @@
   "cust1_requests": [
     {
       "customerName": "cust1",
-      "customerAppName": "voice-assistant",
+      "customerAppName": "voice-assistant (cust1)",
       "input": {
         "text": "வணக்கம்! என் பெயர் ராஜா. நான் சென்னையில் வசிக்கிறேன். இன்று வானிலை எப்படி இருக்கிறது?",
         "language": "ta"
@@ -10,7 +10,7 @@
     },
     {
       "customerName": "cust1",
-      "customerAppName": "voice-assistant",
+      "customerAppName": "voice-assistant (cust1)",
       "input": {
         "text": "நான் ஒரு புத்தகம் வாங்க விரும்புகிறேன். எனக்கு கணினி புத்தகங்கள் வேண்டும்.",
         "language": "ta"
@@ -18,7 +18,7 @@
     },
     {
       "customerName": "cust1",
-      "customerAppName": "voice-assistant",
+      "customerAppName": "voice-assistant (cust1)",
       "input": {
         "text": "எனக்கு உதவி தேவை. என் கணக்கில் பிரச்சனை இருக்கிறது.",
         "language": "ta"
@@ -26,7 +26,7 @@
     },
     {
       "customerName": "cust1",
-      "customerAppName": "voice-assistant",
+      "customerAppName": "voice-assistant (cust1)",
       "input": {
         "text": "நான் ஒரு ரெஸ்டாரண்டில் மேஜை புக்கிங் செய்ய விரும்புகிறேன்.",
         "language": "ta"
@@ -34,7 +34,7 @@
     },
     {
       "customerName": "cust1",
-      "customerAppName": "voice-assistant",
+      "customerAppName": "voice-assistant (cust1)",
       "input": {
         "text": "எனக்கு டாக்டர் அப்பாயின்ட்மென்ட் தேவை. இன்று மாலை 4 மணிக்கு.",
         "language": "ta"
@@ -42,7 +42,7 @@
     },
     {
       "customerName": "cust1",
-      "customerAppName": "voice-assistant",
+      "customerAppName": "voice-assistant (cust1)",
       "input": {
         "text": "नमस्ते! मेरा नाम राजेश है। मैं दिल्ली में रहता हूं। आज मौसम कैसा है?",
         "language": "hi"
@@ -50,7 +50,7 @@
     },
     {
       "customerName": "cust1",
-      "customerAppName": "voice-assistant",
+      "customerAppName": "voice-assistant (cust1)",
       "input": {
         "text": "मुझे एक किताब खरीदनी है। मुझे कंप्यूटर की किताबें चाहिए।",
         "language": "hi"
@@ -58,7 +58,7 @@
     },
     {
       "customerName": "cust1",
-      "customerAppName": "voice-assistant",
+      "customerAppName": "voice-assistant (cust1)",
       "input": {
         "text": "मुझे मदद चाहिए। मेरे खाते में समस्या है।",
         "language": "hi"
@@ -66,7 +66,7 @@
     },
     {
       "customerName": "cust1",
-      "customerAppName": "voice-assistant",
+      "customerAppName": "voice-assistant (cust1)",
       "input": {
         "text": "मुझे रेस्टोरेंट में टेबल बुक करनी है।",
         "language": "hi"
@@ -74,7 +74,7 @@
     },
     {
       "customerName": "cust1",
-      "customerAppName": "voice-assistant",
+      "customerAppName": "voice-assistant (cust1)",
       "input": {
         "text": "मुझे डॉक्टर का अपॉइंटमेंट चाहिए। आज शाम 4 बजे।",
         "language": "hi"
@@ -84,7 +84,7 @@
   "cust2_requests": [
     {
       "customerName": "cust2",
-      "customerAppName": "chat-support",
+      "customerAppName": "chat-support (cust2)",
       "input": {
         "text": "எனக்கு உங்கள் சேவையில் பிரச்சனை இருக்கிறது. எனது ஆர்டர் டெலிவரி ஆகவில்லை.",
         "language": "ta"
@@ -92,7 +92,7 @@
     },
     {
       "customerName": "cust2",
-      "customerAppName": "chat-support",
+      "customerAppName": "chat-support (cust2)",
       "input": {
         "text": "எனது கணக்கில் பணம் ரீஃபண்ட் செய்ய வேண்டும். எப்படி செய்வது?",
         "language": "ta"
@@ -100,7 +100,7 @@
     },
     {
       "customerName": "cust2",
-      "customerAppName": "chat-support",
+      "customerAppName": "chat-support (cust2)",
       "input": {
         "text": "எனக்கு உங்கள் புதிய தயாரிப்புகள் பற்றி தகவல் தேவை.",
         "language": "ta"
@@ -108,7 +108,7 @@
     },
     {
       "customerName": "cust2",
-      "customerAppName": "chat-support",
+      "customerAppName": "chat-support (cust2)",
       "input": {
         "text": "எனது பாஸ்வேர்ட் மறந்துவிட்டது. எப்படி மீட்டெடுப்பது?",
         "language": "ta"
@@ -116,7 +116,7 @@
     },
     {
       "customerName": "cust2",
-      "customerAppName": "chat-support",
+      "customerAppName": "chat-support (cust2)",
       "input": {
         "text": "எனக்கு உங்கள் குஸ்டமர் கேர் எண் தேவை.",
         "language": "ta"
@@ -124,7 +124,7 @@
     },
     {
       "customerName": "cust2",
-      "customerAppName": "chat-support",
+      "customerAppName": "chat-support (cust2)",
       "input": {
         "text": "मुझे आपकी सेवा में समस्या है। मेरा ऑर्डर डिलीवर नहीं हुआ।",
         "language": "hi"
@@ -132,7 +132,7 @@
     },
     {
       "customerName": "cust2",
-      "customerAppName": "chat-support",
+      "customerAppName": "chat-support (cust2)",
       "input": {
         "text": "मेरे खाते में पैसा रिफंड करना है। कैसे करूं?",
         "language": "hi"
@@ -140,7 +140,7 @@
     },
     {
       "customerName": "cust2",
-      "customerAppName": "chat-support",
+      "customerAppName": "chat-support (cust2)",
       "input": {
         "text": "मुझे आपके नए उत्पादों के बारे में जानकारी चाहिए।",
         "language": "hi"
@@ -148,7 +148,7 @@
     },
     {
       "customerName": "cust2",
-      "customerAppName": "chat-support",
+      "customerAppName": "chat-support (cust2)",
       "input": {
         "text": "मेरा पासवर्ड भूल गया है। कैसे रिकवर करूं?",
         "language": "hi"
@@ -156,7 +156,7 @@
     },
     {
       "customerName": "cust2",
-      "customerAppName": "chat-support",
+      "customerAppName": "chat-support (cust2)",
       "input": {
         "text": "मुझे आपका कस्टमर केयर नंबर चाहिए।",
         "language": "hi"
