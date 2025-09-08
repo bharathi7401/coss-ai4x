@@ -199,10 +199,10 @@ def main():
     parser.add_argument('--mode', choices=['continuous', 'single'], default='continuous',
                        help='Mode: continuous or single batch (default: continuous)')
     parser.add_argument('--interval-min', type=float, default=2.0,
-                       help='Minimum interval between requests in seconds (default: 2.0)')
-    parser.add_argument('--interval-max', type=float, default=5.0,
-                       help='Maximum interval between requests in seconds (default: 5.0)')
-    parser.add_argument('--max-requests', type=int, default=None,
+                       help='Minimum interval between requests in seconds (default: 60.0)')
+    parser.add_argument('--interval-max', type=float, default=60.0,
+                       help='Maximum interval between requests in seconds (default: 90.0)')
+    parser.add_argument('--max-requests', type=int, default=90.0,
                        help='Maximum number of requests to send (default: infinite)')
     parser.add_argument('--customer', choices=['cust1', 'cust2'], default=None,
                        help='Filter by customer (default: both)')

@@ -223,7 +223,7 @@
             "refId": "A"
           }
         ],
-        "title": "Average API Response Time (Seconds)",
+        "title": "Average API Response Time",
         "type": "stat"
       },
       {
