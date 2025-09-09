@@ -1,52 +1,52 @@
 version: "3.7"
 
 services:
-  ai4x-app-new:
+  ai4x-app-hack:
     build: .
-    container_name: ai4x-app-new
+    container_name: ai4x-app-hack
     ports:
-      - "8100:8000"   # new host port → container still listens on 8000
+      - "8200:8000"   # new host port → container still listens on 8000
     volumes:
       - ./ai4x_demo_app.py:/app/ai4x_demo_app.py
       - ./requirements.txt:/app/requirements.txt
 
-  prometheus-new:
-    image: prom/prometheus
-    container_name: prometheus-new
-    ports:
-      - "9190:9090"   # host port 9190 → container port 9090
-    command:
-      - "--config.file=/etc/prometheus/prometheus.yml"
-      - "--storage.tsdb.path=/prometheus"
-      - "--web.enable-lifecycle"
-    volumes:
-      - ./prometheus-new.yml:/etc/prometheus/prometheus.yml
-      - prometheus-data-new:/prometheus   # separate folder
+#   prometheus-new:
+#     image: prom/prometheus
+#     container_name: prometheus-new
+#     ports:
+#       - "9190:9090"   # host port 9190 → container port 9090
+#     command:
+#       - "--config.file=/etc/prometheus/prometheus.yml"
+#       - "--storage.tsdb.path=/prometheus"
+#       - "--web.enable-lifecycle"
+#     volumes:
+#       - ./prometheus-new.yml:/etc/prometheus/prometheus.yml
+#       - prometheus-data-new:/prometheus   # separate folder
 
-  grafana-new:
-    image: grafana/grafana
-    container_name: grafana-new
-    ports:
-      - "3100:3000"   # host port 3100 → container port 3000
-    environment:
-      - GF_SECURITY_ADMIN_USER=admin
-      - GF_SECURITY_ADMIN_PASSWORD=admin
-    volumes:
-      - grafana-data-new:/var/lib/grafana   # separate folder
-    depends_on:
-      - prometheus-new
+#   grafana-new:
+#     image: grafana/grafana
+#     container_name: grafana-new
+#     ports:
+#       - "3100:3000"   # host port 3100 → container port 3000
+#     environment:
+#       - GF_SECURITY_ADMIN_USER=admin
+#       - GF_SECURITY_ADMIN_PASSWORD=admin
+#     volumes:
+#       - grafana-data-new:/var/lib/grafana   # separate folder
+#     depends_on:
+#       - prometheus-new
 
-  request-sender:
-    build: .
-    container_name: request-sender
-    volumes:
-      - ./request_sender.py:/app/request_sender.py
-      - ./sample_requests.json:/app/sample_requests.json
-    command: python request_sender.py --url http://ai4x-app-new:8000 --mode continuous --interval-min 3 --interval-max 8 --wait-startup 15
-    depends_on:
-      - ai4x-app-new
-    restart: unless-stopped
+#   request-sender:
+#     build: .
+#     container_name: request-sender
+#     volumes:
+#       - ./request_sender.py:/app/request_sender.py
+#       - ./sample_requests.json:/app/sample_requests.json
+#     command: python request_sender.py --url http://ai4x-app-new:8000 --mode continuous --interval-min 3 --interval-max 8 --wait-startup 15
+#     depends_on:
+#       - ai4x-app-new
+#     restart: unless-stopped
 
-volumes:
-  prometheus-data-new:
-  grafana-data-new:
+# volumes:
+#   prometheus-data-new:
+#   grafana-data-new:

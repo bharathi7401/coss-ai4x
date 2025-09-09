@@ -597,7 +597,6 @@ def get_data_volume(customer_id: str, service: str, start_date: str = None, end_
         
         if result:
             nmt_chars, tts_chars, llm_tokens, audio_duration = result
-            print("LLM tokens: ", llm_tokens)
             # Only return input characters/tokens for each service
             if service == 'LLM':
                 total_input_chars = llm_tokens or 0
@@ -1113,29 +1112,6 @@ def run_pipeline(payload: PipelineInput, customer_id: str):
         try:
             conn = get_connection()
             cur = conn.cursor()
-
-                    # ---- DB Logging ---
-            cur.execute(f"""
-                INSERT INTO {TABLE_NAME} 
-                (requestId, customerName, customerApp, langdetectionLatency, nmtLatency, llmLatency, backNMTLatency, ttsLatency, overallPipelineLatency,
-                nmtUsage, llmUsage, backNMTUsage, ttsUsage, timestamp, service_type, status)
-                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
-            """, (
-            request_id, customer, appname,
-            latencies.get("LangDetection", None),
-            latencies.get("NMT", None),
-            latencies.get("LLM", None),
-            latencies.get("BackNMT", None),
-            latencies.get("TTS", None),
-            latencies.get("pipelineTotal", None),
-            str(usage.get("NMT", None)),
-            str(usage.get("LLM", None)),
-            str(usage.get("backNMT", None)),
-            str(usage.get("TTS", None)),
-            datetime.now(timezone.utc),
-            "pipeline",
-            "success"
-            ))
             
             # Log NMT service
             cur.execute(f"""
