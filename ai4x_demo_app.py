@@ -1,3 +1,4 @@
+import calendar
 import psycopg2
 import psycopg2.extras
 import statistics
@@ -1291,6 +1292,11 @@ def get_invoices(customer_id: str, month: str = None):
         cur = conn.cursor()
         
         # Get usage data for the month
+        # Calculate the last day of the month
+        year, month_num = month.split('-')
+        last_day = calendar.monthrange(int(year), int(month_num))[1]
+        month_end = f"{month}-{last_day:02d}"
+        
         cur.execute(f"""
             SELECT 
                 service_type,
@@ -1305,7 +1311,7 @@ def get_invoices(customer_id: str, month: str = None):
             WHERE customerName = %s 
             AND timestamp >= %s AND timestamp < %s
             GROUP BY service_type
-        """, (customer_id, f"{month}-01", f"{month}-32"))
+        """, (customer_id, f"{month}-01", f"{month_end}"))
         
         usage_data = cur.fetchall()
         cur.close()
