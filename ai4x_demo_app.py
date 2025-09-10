@@ -1630,6 +1630,9 @@ def run_pipeline(payload: PipelineInput, customer_id: str):
             # Update quota metrics for all services
             for service in ["NMT", "ASR", "TTS", "LLM"]:
                 current_usage = get_current_usage(customer_id, service)
+                if service == "LLM":
+                    print("current usage for LLM: ", current_usage)
+                    print("monthly quota for LLM: ", customer_tier.monthly_quota[service])
                 metrics_collector.update_quota_metrics(customer, service, customer_tier.tier, current_usage, customer_tier.monthly_quota[service])
 
         except Exception as e:

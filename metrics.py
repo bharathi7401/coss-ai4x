@@ -385,6 +385,8 @@ class MetricsCollector:
                            current_usage: int, limit: int) -> None:
         """Update quota usage metrics"""
         usage_percent = (current_usage / limit) * 100 if limit > 0 else 0
+        if usage_percent > 100:
+            usage_percent = 100
         remaining = max(0, limit - current_usage)
         
         CUSTOMER_QUOTA_USAGE.labels(customer, service, tier).set(usage_percent)
