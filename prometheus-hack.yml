@@ -5,14 +5,14 @@ global:
 
 scrape_configs:
   # AI4X application metrics
-  - job_name: 'ai4x-app-new'
+  - job_name: 'ai4x-app-hack'
     static_configs:
-      - targets: ['ai4x-app-new:8000']  # container name + internal port
+      - targets: ['ai4x-app-hack:8000']  # container name + internal port
     metrics_path: '/metrics'
     scrape_interval: 5s
     
   # Prometheus itself
-  - job_name: 'prometheus-new'
+  - job_name: 'prometheus-hack'
     static_configs:
-      - targets: ['prometheus-new:9090']  # container name + internal port
+      - targets: ['prometheus-hack:9090']  # container name + internal port
     scrape_interval: 10s

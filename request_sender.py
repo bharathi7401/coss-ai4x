@@ -29,7 +29,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 class RequestSender:
-    def __init__(self, base_url: str = "http://ai4x-app-new:8000", sample_file: str = "sample_requests.json"):
+    def __init__(self, base_url: str = "http://ai4x-app-hack:8000", sample_file: str = "sample_requests.json"):
         """
         Initialize the request sender.
         
@@ -39,7 +39,7 @@ class RequestSender:
         """
         self.base_url = base_url
         self.sample_file = sample_file
-        self.pipeline_endpoint = f"{base_url}/pipeline"
+        self.pipeline_endpoint = f"{base_url}/services/pipeline/run"
         self.sample_data = self.load_sample_data()
         
     def load_sample_data(self) -> Dict[str, List[Dict[str, Any]]]:
@@ -47,7 +47,7 @@ class RequestSender:
         try:
             with open(self.sample_file, 'r', encoding='utf-8') as f:
                 data = json.load(f)
-            logger.info(f"Loaded {len(data.get('cust1_requests', []))} cust1 requests and {len(data.get('cust2_requests', []))} cust2 requests")
+            logger.info(f"Loaded {len(data.get('customer1_requests', []))} customer1 requests and {len(data.get('customer2_requests', []))} customer2 requests")
             return data
         except FileNotFoundError:
             logger.error(f"Sample data file {self.sample_file} not found!")
@@ -67,11 +67,19 @@ class RequestSender:
             Response data or error information
         """
         try:
-            logger.info(f"Sending request for {request_data['customerName']} - {request_data['input']['text'][:50]}...")
+            customer_id = request_data['customerName']
+            input_text = request_data['input']['text']
+            logger.info(f"Sending request for {customer_id} - {input_text[:50]}...")
+            
+            # Prepare payload according to PipelineInput model
+            payload = {
+                "input": input_text
+            }
             
             response = requests.post(
                 self.pipeline_endpoint,
-                json=request_data,
+                json=payload,
+                params={'customer_id': customer_id},
                 timeout=30,
                 headers={'Content-Type': 'application/json'}
             )
@@ -108,7 +116,7 @@ class RequestSender:
             interval_min: Minimum interval between requests (seconds)
             interval_max: Maximum interval between requests (seconds)
             max_requests: Maximum number of requests to send (None for infinite)
-            customer_filter: Filter by customer ('cust1' or 'cust2', None for both)
+            customer_filter: Filter by customer ('customer1' or 'customer2', None for both)
         """
         logger.info(f"Starting continuous request sending...")
         logger.info(f"Interval: {interval_min}-{interval_max} seconds")
@@ -126,15 +134,15 @@ class RequestSender:
                     break
                 
                 # Select requests based on customer filter
-                if customer_filter == 'cust1':
-                    available_requests = self.sample_data.get('cust1_requests', [])
-                elif customer_filter == 'cust2':
-                    available_requests = self.sample_data.get('cust2_requests', [])
+                if customer_filter == 'customer1':
+                    available_requests = self.sample_data.get('customer1_requests', [])
+                elif customer_filter == 'customer2':
+                    available_requests = self.sample_data.get('customer2_requests', [])
                 else:
                     # Mix both customers
-                    cust1_requests = self.sample_data.get('cust1_requests', [])
-                    cust2_requests = self.sample_data.get('cust2_requests', [])
-                    available_requests = cust1_requests + cust2_requests
+                    customer1_requests = self.sample_data.get('customer1_requests', [])
+                    customer2_requests = self.sample_data.get('customer2_requests', [])
+                    available_requests = customer1_requests + customer2_requests
                 
                 if not available_requests:
                     logger.error("No sample requests available!")
@@ -173,27 +181,27 @@ class RequestSender:
         Send one request from each customer (or specified customer).
         
         Args:
-            customer: Customer to send request for ('cust1', 'cust2', or None for both)
+            customer: Customer to send request for ('customer1', 'customer2', or None for both)
         """
         logger.info("Sending single batch of requests...")
         
-        if customer == 'cust1' or customer is None:
-            cust1_requests = self.sample_data.get('cust1_requests', [])
-            if cust1_requests:
-                request_data = random.choice(cust1_requests)
+        if customer == 'customer1' or customer is None:
+            customer1_requests = self.sample_data.get('customer1_requests', [])
+            if customer1_requests:
+                request_data = random.choice(customer1_requests)
                 self.send_request(request_data)
         
-        if customer == 'cust2' or customer is None:
-            cust2_requests = self.sample_data.get('cust2_requests', [])
-            if cust2_requests:
-                request_data = random.choice(cust2_requests)
+        if customer == 'customer2' or customer is None:
+            customer2_requests = self.sample_data.get('customer2_requests', [])
+            if customer2_requests:
+                request_data = random.choice(customer2_requests)
                 self.send_request(request_data)
 
 def main():
     """Main function with command line argument parsing."""
     parser = argparse.ArgumentParser(description='AI4X Pipeline Request Sender')
-    parser.add_argument('--url', default='http://ai4x-app-new:8000', 
-                       help='Base URL of the AI4X application (default: http://ai4x-app-new:8000)')
+    parser.add_argument('--url', default='http://ai4x-app-hack:8000', 
+                       help='Base URL of the AI4X application (default: http://ai4x-app-hack:8000)')
     parser.add_argument('--sample-file', default='sample_requests.json',
                        help='Path to sample requests JSON file (default: sample_requests.json)')
     parser.add_argument('--mode', choices=['continuous', 'single'], default='continuous',
@@ -204,7 +212,7 @@ def main():
                        help='Maximum interval between requests in seconds (default: 90.0)')
     parser.add_argument('--max-requests', type=int, default=90.0,
                        help='Maximum number of requests to send (default: infinite)')
-    parser.add_argument('--customer', choices=['cust1', 'cust2'], default=None,
+    parser.add_argument('--customer', choices=['customer1', 'customer2'], default=None,
                        help='Filter by customer (default: both)')
     parser.add_argument('--wait-startup', type=int, default=10,
                        help='Wait time in seconds before starting requests (default: 10)')

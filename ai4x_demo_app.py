@@ -157,6 +157,7 @@ def validate_customer_quota(customer_id: str, service: str, usage_amount: int) -
             FROM {TABLE_NAME} 
             WHERE customerName = %s AND service_type = %s 
             AND timestamp >= date_trunc('month', CURRENT_DATE)
+            GROUP BY service_type
         """, (customer_id, service))
         
         result = cur.fetchone()
@@ -194,6 +195,7 @@ def get_current_usage(customer_id: str, service: str) -> int:
             FROM {TABLE_NAME} 
             WHERE customerName = %s AND service_type = %s 
             AND timestamp >= date_trunc('month', CURRENT_DATE)
+            GROUP BY service_type
         """, (customer_id, service))
         
         result = cur.fetchone()
@@ -444,6 +446,7 @@ def get_customer_info(customer_id: str):
                 FROM {TABLE_NAME} 
                 WHERE customerName = %s AND service_type = %s 
                 AND timestamp >= date_trunc('month', CURRENT_DATE)
+                GROUP BY service_type
             """, (customer_id, service))
             
             result = cur.fetchone()
@@ -519,11 +522,13 @@ def nmt_translate(request: NMTRequest, customer_id: str):
             source_language = detect_language_from_text(request.text)
             target_language = "en"
         
-            result = nmt_service.translate_text(
-                text=request.text,
-                source_lang=source_language,
-                target_lang=target_language
-            )
+            # Add component timing for NMT service
+            with metrics_collector.component_timer(rid, "NMT"):
+                result = nmt_service.translate_text(
+                    text=request.text,
+                    source_lang=source_language,
+                    target_lang=target_language
+                )
             
             latency = f"{int((time.time() - start_time) * 1000)}ms"
             
@@ -648,10 +653,12 @@ def asr_transcribe(request: ASRRequest, customer_id: str):
                     detail=f"Quota exceeded for customer {customer_id}. Current tier: {customer_tier.tier}. Monthly ASR limit: {customer_tier.monthly_quota['ASR']} minutes"
                 )
         
-            result = asr_service.transcribe_audio(
-                audio_content=audio_content,
-                audio_format=request.audio_format
-            )
+            # Add component timing for ASR service
+            with metrics_collector.component_timer(rid, "ASR"):
+                result = asr_service.transcribe_audio(
+                    audio_content=audio_content,
+                    audio_format=request.audio_format
+                )
             
             latency = f"{int((time.time() - start_time) * 1000)}ms"
             
@@ -777,11 +784,13 @@ def tts_speak(request: TTSRequest, customer_id: str):
             language = detect_language_from_text(request.text)
             gender = "female"  # Default gender
         
-            result = tts_service.text_to_speech(
-                text=request.text,
-                language=language,
-                gender=gender
-            )
+            # Add component timing for TTS service
+            with metrics_collector.component_timer(rid, "TTS"):
+                result = tts_service.text_to_speech(
+                    text=request.text,
+                    language=language,
+                    gender=gender
+                )
             
             latency = f"{int((time.time() - start_time) * 1000)}ms"
             
@@ -1213,6 +1222,7 @@ def get_quotas(customer_id: str):
                 FROM {TABLE_NAME} 
                 WHERE customerName = %s AND service_type = %s 
                 AND timestamp >= date_trunc('month', CURRENT_DATE)
+                GROUP BY service_type
             """, (customer_id, service))
             
             result = cur.fetchone()
@@ -1407,246 +1417,252 @@ def run_pipeline(payload: PipelineInput, customer_id: str):
                     status_code=429, 
                     detail=f"Quota exceeded for customer {customer_id}. Current tier: {customer_tier.tier}. Monthly NMT limit: {customer_tier.monthly_quota['NMT']} characters"
                 )
-        # ---- Language Detection ----
-        start = time.time()
-        source_language = detect_language_from_text(input_text)
-        latencies["LangDetection"] = f"{int((time.time() - start) * 1000)}ms"
+            
+            # ---- Language Detection ----
+            start = time.time()
+            with metrics_collector.component_timer(rid, "LangDetection"):
+                source_language = detect_language_from_text(input_text)
+            latencies["LangDetection"] = f"{int((time.time() - start) * 1000)}ms"
 
-        current_output = input_text
+            current_output = input_text
 
-        # ---- NMT ----
-        start = time.time()
-        nmt_result = nmt_service.translate_text(current_output, source_language, target_language)
-        latencies["NMT"] = f"{int((time.time() - start) * 1000)}ms"
-        
-        if nmt_result.get("success", False):
-            usage["NMT"] = str(len(current_output))
-            current_output = nmt_result["translated_text"]
-            pipeline_output["NMT"] = current_output
+            # ---- NMT ----
+            start = time.time()
+            with metrics_collector.component_timer(rid, "NMT"):
+                nmt_result = nmt_service.translate_text(current_output, source_language, target_language)
+            latencies["NMT"] = f"{int((time.time() - start) * 1000)}ms"
             
-            # Record Prometheus metrics for NMT
-            metrics_collector.service_request("NMT", customer)
-            metrics_collector.nmt_chars(customer, "pipeline", source_language, target_language, len(input_text))
-            cost = calculate_service_cost(customer_id, "NMT", len(input_text))
-            metrics_collector.record_service_cost(customer, "NMT", customer_tier.tier, cost)
-        else:
-            # NMT failed, don't log usage
-            current_output = current_output  # Keep original text
-            pipeline_output["NMT"] = f"Error: {nmt_result.get('error', 'Translation failed')}"
+            if nmt_result.get("success", False):
+                usage["NMT"] = str(len(current_output))
+                current_output = nmt_result["translated_text"]
+                pipeline_output["NMT"] = current_output
+                
+                # Record Prometheus metrics for NMT
+                metrics_collector.service_request("NMT", customer)
+                metrics_collector.nmt_chars(customer, "pipeline", source_language, target_language, len(input_text))
+                cost = calculate_service_cost(customer_id, "NMT", len(input_text))
+                metrics_collector.record_service_cost(customer, "NMT", customer_tier.tier, cost)
+            else:
+                # NMT failed, don't log usage
+                current_output = current_output  # Keep original text
+                pipeline_output["NMT"] = f"Error: {nmt_result.get('error', 'Translation failed')}"
 
-        # ---- LLM ----
-        start = time.time()
-        llm_result = llm_service.process_query(current_output)
-        latencies["LLM"] = f"{int((time.time() - start) * 1000)}ms"
-        
-        if llm_result.get("success", False):
-            usage["LLM"] = str(llm_result["total_tokens"])
-            current_output = llm_result["response"]
-            pipeline_output["LLM"] = current_output
-            response_data = current_output
+            # ---- LLM ----
+            start = time.time()
+            with metrics_collector.component_timer(rid, "LLM"):
+                llm_result = llm_service.process_query(current_output)
+            latencies["LLM"] = f"{int((time.time() - start) * 1000)}ms"
             
-            # Record Prometheus metrics for LLM
-            metrics_collector.service_request("LLM", customer)
-            metrics_collector.llm_tokens(customer, "pipeline", "gemini-2.0-flash", llm_result["total_tokens"])
-            cost = calculate_service_cost(customer_id, "LLM", llm_result["total_tokens"])
-            metrics_collector.record_service_cost(customer, "LLM", customer_tier.tier, cost)
+            if llm_result.get("success", False):
+                usage["LLM"] = str(llm_result["total_tokens"])
+                current_output = llm_result["response"]
+                pipeline_output["LLM"] = current_output
+                response_data = current_output
+                
+                # Record Prometheus metrics for LLM
+                metrics_collector.service_request("LLM", customer)
+                metrics_collector.llm_tokens(customer, "pipeline", "gemini-2.0-flash", llm_result["total_tokens"])
+                cost = calculate_service_cost(customer_id, "LLM", llm_result["total_tokens"])
+                metrics_collector.record_service_cost(customer, "LLM", customer_tier.tier, cost)
             
-            # Log LLM usage separately with service_type='LLM' only when success=True
-            try:
-                llm_conn = get_connection()
-                llm_cur = llm_conn.cursor()
-                llm_cur.execute(f"""
-                    INSERT INTO {TABLE_NAME} 
-                    (requestId, customerName, customerApp, llmLatency, llmUsage, timestamp, service_type, status)
-                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
-                """, (
-                    f"{request_id}_llm", customer, "ai4x_demo",
-                    latencies.get("LLM", None),
-                    str(usage.get("LLM", None)),
-                    datetime.now(timezone.utc),
-                    "LLM",
-                    "success"
-                ))
-                llm_conn.commit()
-                llm_cur.close()
-                llm_conn.close()
-            except Exception as llm_log_error:
-                # Don't fail the pipeline if LLM logging fails
-                print(f"Failed to log LLM usage: {llm_log_error}")
-                pass
-        else:
-            # LLM failed, don't log usage
-            current_output = current_output  # Keep previous output
-            pipeline_output["LLM"] = f"Error: {llm_result.get('error', 'LLM processing failed')}"
-            response_data = current_output
-
-        # ---- Backward NMT ----
-        start = time.time()
-        back_translation = nmt_service.translate_text(
-            text=current_output,
-            source_lang="en",
-            target_lang=source_language
-        )
-        latencies["BackNMT"] = f"{int((time.time() - start) * 1000)}ms"
-        
-        if back_translation.get("success", False):
-            usage["backNMT"] = str(len(current_output))
-            pipeline_output["BackNMT"] = back_translation["translated_text"]
-            response_data = back_translation["translated_text"]
-            
-            # Record Prometheus metrics for BackNMT
-            metrics_collector.service_request("NMT", customer)  # BackNMT is also NMT service
-            metrics_collector.nmt_chars(customer, "pipeline", "en", source_language, len(current_output))
-            cost = calculate_service_cost(customer_id, "NMT", len(current_output))
-            metrics_collector.record_service_cost(customer, "NMT", customer_tier.tier, cost)
-        else:
-            # BackNMT failed, don't log usage
-            pipeline_output["BackNMT"] = f"Error: {back_translation.get('error', 'Back translation failed')}"
-            response_data = current_output  # Keep previous output
-
-        # ---- TTS ----
-        start = time.time()
-        tts_result = tts_service.text_to_speech(response_data, source_language, gender="female")
-        latencies["TTS"] = f"{int((time.time() - start) * 1000)}ms"
-        
-        if tts_result.get("success", False):
-            usage["TTS"] = str(len(response_data))
-            pipeline_output["TTS"] = tts_result["audio_content"]
-            response_data = tts_result["audio_content"]
-            
-            # Record Prometheus metrics for TTS
-            metrics_collector.service_request("TTS", customer)
-            metrics_collector.tts_chars(customer, "pipeline", source_language, len(response_data))
-            cost = calculate_service_cost(customer_id, "TTS", len(response_data))
-            metrics_collector.record_service_cost(customer, "TTS", customer_tier.tier, cost)
-        else:
-            # TTS failed, don't log usage
-            pipeline_output["TTS"] = f"Error: {tts_result.get('error', 'TTS conversion failed')}"
-            response_data = response_data  # Keep previous output
-
-        # Calculate total pipeline latency
-        latencies["pipelineTotal"] = f"{int((time.time() - pipeline_start_time) * 1000)}ms"
-
-        # ---- DB Logging - Individual Service Entries (only for successful services) ----
-        try:
-            conn = get_connection()
-            cur = conn.cursor()
-
-            # ---- DB Logging - Only log services that were successful ---
-            cur.execute(f"""
-                INSERT INTO {TABLE_NAME} 
-                (requestId, customerName, customerApp, langdetectionLatency, nmtLatency, llmLatency, backNMTLatency, ttsLatency, overallPipelineLatency,
-                nmtUsage, llmUsage, backNMTUsage, ttsUsage, timestamp, service_type, status)
-                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
-            """, (
-            request_id, customer, appname,
-            latencies.get("LangDetection", None),
-            latencies.get("NMT", None),
-            latencies.get("LLM", None),
-            latencies.get("BackNMT", None),
-            latencies.get("TTS", None),
-            latencies.get("pipelineTotal", None),
-            str(usage.get("NMT", None)),
-            str(usage.get("LLM", None)),
-            str(usage.get("backNMT", None)),
-            str(usage.get("TTS", None)),
-            datetime.now(timezone.utc),
-            "pipeline",
-            "success"
-            ))
-            
-            # Log NMT service only if it was successful
-            if usage.get("NMT") is not None:
-                cur.execute(f"""
-                    INSERT INTO {TABLE_NAME} 
-                    (requestId, customerName, customerApp, nmtLatency, nmtUsage, timestamp, service_type, status)
-                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
-                """, (
-                    f"{request_id}_nmt", customer, appname,
-                    latencies.get("NMT", None),
-                    str(usage.get("NMT", None)),
-                    datetime.now(timezone.utc),
-                    "NMT",
-                    "success"
-                ))
-            
-            # Log BackNMT service only if it was successful
-            if usage.get("backNMT") is not None:
-                cur.execute(f"""
-                    INSERT INTO {TABLE_NAME} 
-                    (requestId, customerName, customerApp, nmtLatency, nmtUsage, timestamp, service_type, status)
-                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
-                """, (
-                    f"{request_id}_backnmt", customer, appname,
-                    latencies.get("BackNMT", None),
-                    str(usage.get("backNMT", None)),
-                    datetime.now(timezone.utc),
-                    "NMT",  # BackNMT is also NMT service
-                    "success"
-                ))
-            
-            # Log TTS service only if it was successful
-            if usage.get("TTS") is not None:
-                cur.execute(f"""
-                    INSERT INTO {TABLE_NAME} 
-                    (requestId, customerName, customerApp, ttsLatency, ttsUsage, timestamp, service_type, status)
-                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
-                """, (
-                    f"{request_id}_tts", customer, appname,
-                    latencies.get("TTS", None),
-                    str(usage.get("TTS", None)),
-                    datetime.now(timezone.utc),
-                    "TTS",
-                    "success"
-                ))
-            
-            conn.commit()
-            cur.close()
-            conn.close()
-        except Exception as db_error:
-            print(f"Failed to log individual service usage: {db_error}")
-            pass  # Don't fail the pipeline if DB logging fails
-
-    except Exception as e:
-        success = False
-        # Log error to database for each service that might have been processed
-        try:
-            conn = get_connection()
-            cur = conn.cursor()
-            
-            # Log error for each service that was attempted
-            services_to_log = ["NMT", "LLM", "TTS"]
-            for service in services_to_log:
+                # Log LLM usage separately with service_type='LLM' only when success=True
                 try:
+                    llm_conn = get_connection()
+                    llm_cur = llm_conn.cursor()
+                    llm_cur.execute(f"""
+                        INSERT INTO {TABLE_NAME} 
+                        (requestId, customerName, customerApp, llmLatency, llmUsage, timestamp, service_type, status)
+                        VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
+                    """, (
+                        f"{request_id}_llm", customer, "ai4x_demo",
+                        latencies.get("LLM", None),
+                        str(usage.get("LLM", None)),
+                        datetime.now(timezone.utc),
+                        "LLM",
+                        "success"
+                    ))
+                    llm_conn.commit()
+                    llm_cur.close()
+                    llm_conn.close()
+                except Exception as llm_log_error:
+                    # Don't fail the pipeline if LLM logging fails
+                    print(f"Failed to log LLM usage: {llm_log_error}")
+                    pass
+            else:
+                # LLM failed, don't log usage
+                current_output = current_output  # Keep previous output
+                pipeline_output["LLM"] = f"Error: {llm_result.get('error', 'LLM processing failed')}"
+                response_data = current_output
+
+            # ---- Backward NMT ----
+            start = time.time()
+            with metrics_collector.component_timer(rid, "BackNMT"):
+                back_translation = nmt_service.translate_text(
+                    text=current_output,
+                    source_lang="en",
+                    target_lang=source_language
+                )
+            latencies["BackNMT"] = f"{int((time.time() - start) * 1000)}ms"
+            
+            if back_translation.get("success", False):
+                usage["backNMT"] = str(len(current_output))
+                pipeline_output["BackNMT"] = back_translation["translated_text"]
+                response_data = back_translation["translated_text"]
+                
+                # Record Prometheus metrics for BackNMT
+                metrics_collector.service_request("NMT", customer)  # BackNMT is also NMT service
+                metrics_collector.nmt_chars(customer, "pipeline", "en", source_language, len(current_output))
+                cost = calculate_service_cost(customer_id, "NMT", len(current_output))
+                metrics_collector.record_service_cost(customer, "NMT", customer_tier.tier, cost)
+            else:
+                # BackNMT failed, don't log usage
+                pipeline_output["BackNMT"] = f"Error: {back_translation.get('error', 'Back translation failed')}"
+                response_data = current_output  # Keep previous output
+
+            # ---- TTS ----
+            start = time.time()
+            with metrics_collector.component_timer(rid, "TTS"):
+                tts_result = tts_service.text_to_speech(response_data, source_language, gender="female")
+            latencies["TTS"] = f"{int((time.time() - start) * 1000)}ms"
+            
+            if tts_result.get("success", False):
+                usage["TTS"] = str(len(response_data))
+                pipeline_output["TTS"] = tts_result["audio_content"]
+                response_data = tts_result["audio_content"]
+                
+                # Record Prometheus metrics for TTS
+                metrics_collector.service_request("TTS", customer)
+                metrics_collector.tts_chars(customer, "pipeline", source_language, int(usage["TTS"]))
+                cost = calculate_service_cost(customer_id, "TTS", int(usage["TTS"]))
+                metrics_collector.record_service_cost(customer, "TTS", customer_tier.tier, cost)
+            else:
+                # TTS failed, don't log usage
+                pipeline_output["TTS"] = f"Error: {tts_result.get('error', 'TTS conversion failed')}"
+                response_data = response_data  # Keep previous output
+
+            # Calculate total pipeline latency
+            latencies["pipelineTotal"] = f"{int((time.time() - pipeline_start_time) * 1000)}ms"
+
+            # ---- DB Logging - Individual Service Entries (only for successful services) ----
+            try:
+                conn = get_connection()
+                cur = conn.cursor()
+
+                # ---- DB Logging - Only log services that were successful ---
+                cur.execute(f"""
+                    INSERT INTO {TABLE_NAME} 
+                    (requestId, customerName, customerApp, langdetectionLatency, nmtLatency, llmLatency, backNMTLatency, ttsLatency, overallPipelineLatency,
+                    nmtUsage, llmUsage, backNMTUsage, ttsUsage, timestamp, service_type, status)
+                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                """, (
+                request_id, customer, appname,
+                latencies.get("LangDetection", None),
+                latencies.get("NMT", None),
+                latencies.get("LLM", None),
+                latencies.get("BackNMT", None),
+                latencies.get("TTS", None),
+                latencies.get("pipelineTotal", None),
+                str(usage.get("NMT", None)),
+                str(usage.get("LLM", None)),
+                str(usage.get("backNMT", None)),
+                str(usage.get("TTS", None)),
+                datetime.now(timezone.utc),
+                "pipeline",
+                "success"
+                ))
+                
+                # Log NMT service only if it was successful
+                if usage.get("NMT") is not None:
                     cur.execute(f"""
                         INSERT INTO {TABLE_NAME} 
-                        (requestId, customerName, customerApp, timestamp, service_type, status, error_type)
-                        VALUES (%s,%s,%s,%s,%s,%s,%s)
+                        (requestId, customerName, customerApp, nmtLatency, nmtUsage, timestamp, service_type, status)
+                        VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
                     """, (
-                        f"{request_id}_{service.lower()}", customer, appname,
+                        f"{request_id}_nmt", customer, appname,
+                        latencies.get("NMT", None),
+                        str(usage.get("NMT", None)),
                         datetime.now(timezone.utc),
-                        service,
-                        "error",
-                        str(e)
+                        "NMT",
+                        "success"
                     ))
-                except:
-                    pass  # Continue with other services even if one fails
-            
-            conn.commit()
-            cur.close()
-            conn.close()
-        except:
-            pass  # Don't fail if DB logging fails
-        raise HTTPException(status_code=500, detail=str(e))
+                
+                # Log BackNMT service only if it was successful
+                if usage.get("backNMT") is not None:
+                    cur.execute(f"""
+                        INSERT INTO {TABLE_NAME} 
+                        (requestId, customerName, customerApp, nmtLatency, nmtUsage, timestamp, service_type, status)
+                        VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
+                    """, (
+                        f"{request_id}_backnmt", customer, appname,
+                        latencies.get("BackNMT", None),
+                        str(usage.get("backNMT", None)),
+                        datetime.now(timezone.utc),
+                        "NMT",  # BackNMT is also NMT service
+                        "success"
+                    ))
+                
+                # Log TTS service only if it was successful
+                if usage.get("TTS") is not None:
+                    cur.execute(f"""
+                        INSERT INTO {TABLE_NAME} 
+                        (requestId, customerName, customerApp, ttsLatency, ttsUsage, timestamp, service_type, status)
+                        VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
+                    """, (
+                        f"{request_id}_tts", customer, appname,
+                        latencies.get("TTS", None),
+                        str(usage.get("TTS", None)),
+                        datetime.now(timezone.utc),
+                        "TTS",
+                        "success"
+                    ))
+                
+                conn.commit()
+                cur.close()
+                conn.close()
+            except Exception as db_error:
+                print(f"Failed to log individual service usage: {db_error}")
+                pass  # Don't fail the pipeline if DB logging fails
 
-        # Update pipeline metrics
-        pipeline_duration = (time.time() - pipeline_start_time)
-        metrics_collector.update_pipeline_metrics(customer, success, pipeline_duration)
-        
-        # Update quota metrics for all services
-        for service in ["NMT", "ASR", "TTS", "LLM"]:
-            current_usage = get_current_usage(customer_id, service)
-            metrics_collector.update_quota_metrics(customer, service, customer_tier.tier, current_usage, customer_tier.monthly_quota[service])
+            # Update pipeline metrics
+            pipeline_duration = (time.time() - pipeline_start_time)
+            metrics_collector.update_pipeline_metrics(customer, success, pipeline_duration)
+            
+            # Update quota metrics for all services
+            for service in ["NMT", "ASR", "TTS", "LLM"]:
+                current_usage = get_current_usage(customer_id, service)
+                metrics_collector.update_quota_metrics(customer, service, customer_tier.tier, current_usage, customer_tier.monthly_quota[service])
+
+        except Exception as e:
+            success = False
+            # Log error to database for each service that might have been processed
+            try:
+                conn = get_connection()
+                cur = conn.cursor()
+                
+                # Log error for each service that was attempted
+                services_to_log = ["NMT", "LLM", "TTS"]
+                for service in services_to_log:
+                    try:
+                        cur.execute(f"""
+                            INSERT INTO {TABLE_NAME} 
+                            (requestId, customerName, customerApp, timestamp, service_type, status, error_type)
+                            VALUES (%s,%s,%s,%s,%s,%s,%s)
+                        """, (
+                            f"{request_id}_{service.lower()}", customer, appname,
+                            datetime.now(timezone.utc),
+                            service,
+                            "error",
+                            str(e)
+                        ))
+                    except:
+                        pass  # Continue with other services even if one fails
+                
+                conn.commit()
+                cur.close()
+                conn.close()
+            except:
+                pass  # Don't fail if DB logging fails
+            raise HTTPException(status_code=500, detail=str(e))
 
         return {
             "requestId": request_id,
