@@ -282,45 +282,37 @@ class MetricsCollector:
 
     # ---------- background: system metrics ----------
     def _start_system_metrics_collector(self) -> None:
-        def collect():
-            # Initialize CPU usage measurement
-            psutil.cpu_percent(interval=None)  # Initialize without blocking
-            
+        """Start background thread to collect system metrics"""
+        def collect_system_metrics():
             while True:
                 try:
-                    # Get CPU usage without blocking
-                    cpu_percent = psutil.cpu_percent(interval=None)
-                    if cpu_percent is not None and cpu_percent >= 0:
-                        CPU_USAGE.set(cpu_percent)
-                        self.set_cpu_usage_percent(cpu_percent)
+                    # CPU usage
+                    cpu_percent = psutil.cpu_percent(interval=1)
+                    CPU_USAGE.set(cpu_percent)
                     
-                    # Get memory usage
-                    mem = psutil.virtual_memory()
-                    if mem.percent is not None and mem.percent >= 0:
-                        MEMORY_USAGE.set(mem.used)
-                        MEMORY_USAGE_PERCENT.set(mem.percent)
-                        self.set_memory_usage_percent(mem.percent)
-
-                    # GPU usage (optional)
+                    # Memory usage
+                    memory = psutil.virtual_memory()
+                    MEMORY_USAGE.set(memory.used)
+                    MEMORY_USAGE_PERCENT.set(memory.percent)
+                    
+                    # GPU metrics (if available)
                     try:
-                        import GPUtil  # type: ignore
+                        import GPUtil
                         gpus = GPUtil.getGPUs()
                         if gpus:
-                            gpu = gpus[0]
-                            GPU_USAGE.set(gpu.load * 100.0)
-                            GPU_MEMORY.set(gpu.memoryUsed * 1024 * 1024)
-                    except Exception:
-                        pass  # GPU monitoring not available
-
-                    # Update system-level metrics
-                    self._update_system_metrics()
-
-                    time.sleep(5)  # Collect every 5 seconds
-                except Exception:
-                    time.sleep(5)  # Continue on error
-
-        # Start the background thread
-        thread = threading.Thread(target=collect, daemon=True)
+                            gpu = gpus[0]  # Use first GPU
+                            GPU_USAGE.set(gpu.load * 100)
+                            GPU_MEMORY.set(gpu.memoryUsed * 1024 * 1024)  # Convert MB to bytes
+                    except ImportError:
+                        # GPU monitoring not available
+                        pass
+                    
+                    time.sleep(5)  # Update every 5 seconds
+                except Exception as e:
+                    print(f"Error collecting system metrics: {e}")
+                    time.sleep(5)
+        
+        thread = threading.Thread(target=collect_system_metrics, daemon=True)
         thread.start()
 
     def _update_system_metrics(self) -> None:
@@ -330,7 +322,7 @@ class MetricsCollector:
         self.set_active_tenants(2)  # cust1 and cust2
         
         # Set service counts
-        self.set_service_count("total", 4)  # NMT, LLM, TTS, ASR
+        self.set_service_count("total", 3)  # NMT, LLM, TTS, ASR
         self.set_service_count("nmt", 1)
         self.set_service_count("llm", 1)
         self.set_service_count("tts", 1)
