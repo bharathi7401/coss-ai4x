@@ -494,6 +494,55 @@ class MetricsCollector:
     def record_availability_failure(self, failure_type: str, component: str) -> None:
         """Record a system availability failure"""
         SYSTEM_AVAILABILITY_FAILURES.labels(failure_type, component).inc()
+    
+    def _calculate_sla_compliance(self) -> None:
+        """Calculate SLA compliance based on actual performance vs targets"""
+        # SLA Targets
+        AVAILABILITY_TARGET = 100.0  # 100% availability target
+        RESPONSE_TIME_TARGET = 1.0   # 1 second response time target
+        THROUGHPUT_TARGET = 20.0     # 20 requests per minute target
+        
+        # Get current metrics
+        total_requests = sum(self._request_success_count.values()) + sum(self._request_error_count.values())
+        total_success = sum(self._request_success_count.values())
+        
+        # Calculate availability compliance
+        if total_requests > 0:
+            current_availability = (total_success / total_requests) * 100
+            availability_compliance = min(100.0, (current_availability / AVAILABILITY_TARGET) * 100)
+        else:
+            availability_compliance = 100.0  # No requests yet, assume 100% compliance
+        
+        # Calculate response time compliance
+        # Get average response time from recent requests
+        if self._req:
+            current_time = time.time()
+            recent_requests = [
+                req for req in self._req.values()
+                if current_time - req["t0"] < 300  # Last 5 minutes
+            ]
+            
+            if recent_requests:
+                avg_response_time = sum(
+                    current_time - req["t0"] for req in recent_requests
+                ) / len(recent_requests)
+                response_time_compliance = max(0.0, min(100.0, (RESPONSE_TIME_TARGET / avg_response_time) * 100))
+            else:
+                response_time_compliance = 100.0  # No recent requests, assume 100% compliance
+        else:
+            response_time_compliance = 100.0  # No requests, assume 100% compliance
+        
+        # Calculate throughput compliance
+        if self._throughput_counter:
+            total_requests_per_minute = sum(self._throughput_counter.values()) * 6  # Convert 10-second intervals to per minute
+            throughput_compliance = min(100.0, (total_requests_per_minute / THROUGHPUT_TARGET) * 100)
+        else:
+            throughput_compliance = 100.0  # No throughput data, assume 100% compliance
+        
+        # Set SLA compliance metrics
+        self.set_sla_compliance("availability", availability_compliance)
+        self.set_sla_compliance("response_time", response_time_compliance)
+        self.set_sla_compliance("throughput", throughput_compliance)
 
     def update_dynamic_metrics(self) -> None:
         """Update metrics that should be calculated from actual request data"""
@@ -551,6 +600,9 @@ class MetricsCollector:
             self.set_system_uptime("1h", 100.0)
             self.set_system_uptime("24h", 100.0)
             self.set_system_uptime("7d", 100.0)
+        
+        # Calculate SLA compliance based on targets
+        self._calculate_sla_compliance()
         
         # Calculate QoS performance scores based on actual performance
         # Performance score = (availability * 0.4) + ((100 - error_rate) * 0.3) + (response_time_score * 0.3)

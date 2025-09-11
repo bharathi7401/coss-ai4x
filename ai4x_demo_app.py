@@ -121,16 +121,8 @@ async def update_metrics_periodically():
     """Update system metrics every 30 seconds"""
     while True:
         try:
-            # Update QoS and SLA metrics based on recent performance
-            metrics_collector.set_qos_availability("1h", 99.5)
-            metrics_collector.set_qos_availability("24h", 99.2)
-            metrics_collector.set_qos_availability("7d", 98.8)
-            
-            metrics_collector.set_sla_compliance("availability", 99.1)
-            metrics_collector.set_sla_compliance("response_time", 98.5)
-            metrics_collector.set_sla_compliance("throughput", 99.0)
-            
-            # Update dynamic metrics
+            # Update dynamic metrics (QoS, SLA, performance scores)
+            # All metrics are now calculated from real request data
             metrics_collector.update_dynamic_metrics()
             
         except Exception as e:
