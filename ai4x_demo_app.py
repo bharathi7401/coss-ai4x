@@ -3,6 +3,7 @@ import psycopg2.extras
 import statistics
 import time
 import uuid
+import numpy as np
 from datetime import datetime, timezone
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
