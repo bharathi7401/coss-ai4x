@@ -138,6 +138,9 @@ def run_pipeline(payload: PipelineInput):
 
     success = True
     response_data = None
+    
+    # Track success status of each service
+    service_success = {"NMT": False, "LLM": False, "BackNMT": False, "TTS": False}
 
     with metrics_collector.request_timer(customer, appname, "/pipeline") as rid:
         try:
@@ -152,47 +155,63 @@ def run_pipeline(payload: PipelineInput):
             if "NMT" in pipeline:
                 with metrics_collector.component_timer(rid, "NMT"):
                     usage["NMT"] = str(len(current_output))
-                    current_output = nmt_service.translate_text(current_output, source_language, target_language)
+                    nmt_result = nmt_service.translate_text(current_output, source_language, target_language)
                     latencies["NMT"] = f"{int((time.time() - start) * 1000)}ms"
-                    pipeline_output["NMT"] = current_output["translated_text"]
-                    metrics_collector.nmt_chars(customer, appname, source_language, target_language,len(current_output["translated_text"]))
+                    pipeline_output["NMT"] = nmt_result["translated_text"]
+                    current_output = nmt_result["translated_text"]
+                    # Track success and only log metrics if NMT was successful
+                    service_success["NMT"] = nmt_result.get("success", False)
+                    if service_success["NMT"]:
+                        metrics_collector.nmt_chars(customer, appname, source_language, target_language, len(nmt_result["translated_text"]))
 
             # ---- LLM ----
             if "LLM" in pipeline:
                 with metrics_collector.component_timer(rid, "LLM"):
-                    current_output = llm_service.process_query(current_output)
+                    llm_result = llm_service.process_query(current_output)
                     latencies["LLM"] = f"{int((time.time() - start) * 1000)}ms"
-                    pipeline_output["LLM"] = current_output["response"]
-                    response_data = current_output["response"]
-                    usage["LLM"] = str(current_output["total_tokens"])
-                    metrics_collector.llm_tokens(customer, appname, "gemini-2.5-flash",current_output["total_tokens"])
+                    pipeline_output["LLM"] = llm_result["response"]
+                    response_data = llm_result["response"]
+                    usage["LLM"] = str(llm_result["total_tokens"])
+                    # Track success and only log metrics if LLM was successful
+                    service_success["LLM"] = llm_result.get("success", False)
+                    if service_success["LLM"]:
+                        metrics_collector.llm_tokens(customer, appname, "gemini-2.5-flash", llm_result["total_tokens"])
 
                     # Backward NMT
                     with metrics_collector.component_timer(rid, "BackNMT"):
-                        usage["backNMT"] = str(len(current_output["response"]))
+                        usage["backNMT"] = str(len(llm_result["response"]))
                         back_translation = nmt_service.translate_text(
-                            text=current_output["response"],
+                            text=llm_result["response"],
                             source_lang="en",
                             target_lang=source_language
                         )
                         latencies["BackNMT"] = f"{int((time.time() - start) * 1000)}ms"
                         pipeline_output["BackNMT"] = back_translation["translated_text"]
-                        metrics_collector.nmt_chars(customer, appname, "en", source_language,len(back_translation["translated_text"]))
+                        # Track success and only log metrics if BackNMT was successful
+                        service_success["BackNMT"] = back_translation.get("success", False)
+                        if service_success["BackNMT"]:
+                            metrics_collector.nmt_chars(customer, appname, "en", source_language, len(back_translation["translated_text"]))
                         response_data = back_translation["translated_text"]
 
             # ---- TTS ----
             if "TTS" in pipeline:
                 with metrics_collector.component_timer(rid, "TTS"):
                     usage["TTS"] = str(len(response_data))
-                    current_output = tts_service.text_to_speech(response_data, source_language, gender="female")
+                    tts_result = tts_service.text_to_speech(response_data, source_language, gender="female")
                     latencies["TTS"] = f"{int((time.time() - start) * 1000)}ms"
-                    pipeline_output["TTS"] = current_output["audio_content"]
-                    metrics_collector.tts_chars(customer, appname, source_language,len(response_data))
-                    response_data = current_output["audio_content"]
+                    pipeline_output["TTS"] = tts_result["audio_content"]
+                    # Track success and only log metrics if TTS was successful
+                    service_success["TTS"] = tts_result.get("success", False)
+                    if service_success["TTS"]:
+                        metrics_collector.tts_chars(customer, appname, source_language, len(response_data))
+                    response_data = tts_result["audio_content"]
 
             # ---- DB Logging ----
+            # Only log metrics for successful services
             conn = get_connection()
             cur = conn.cursor()
+            
+            # Only log metrics for services that were successful
             cur.execute(f"""
                 INSERT INTO {TABLE_NAME} 
                 (requestId, customerName, customerApp, langdetectionLatency, nmtLatency, llmLatency, backNMTLatency, ttsLatency, overallPipelineLatency,
@@ -201,15 +220,15 @@ def run_pipeline(payload: PipelineInput):
             """, (
                 request_id, customer, appname,
                 latencies.get("LangDetection", None),
-                latencies.get("NMT", None),
-                latencies.get("LLM", None),
-                latencies.get("BackNMT", None),
-                latencies.get("TTS", None),
+                latencies.get("NMT", None) if service_success["NMT"] else None,
+                latencies.get("LLM", None) if service_success["LLM"] else None,
+                latencies.get("BackNMT", None) if service_success["BackNMT"] else None,
+                latencies.get("TTS", None) if service_success["TTS"] else None,
                 latencies.get("pipelineTotal", None),
-                str(usage.get("NMT", None)),
-                str(usage.get("LLM", None)),
-                str(usage.get("backNMT", None)),
-                str(usage.get("TTS", None)),
+                str(usage.get("NMT", None)) if service_success["NMT"] else None,
+                str(usage.get("LLM", None)) if service_success["LLM"] else None,
+                str(usage.get("backNMT", None)) if service_success["BackNMT"] else None,
+                str(usage.get("TTS", None)) if service_success["TTS"] else None,
                 datetime.now(timezone.utc)
             ))
             conn.commit()
