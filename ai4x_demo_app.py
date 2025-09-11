@@ -149,6 +149,15 @@ def metrics():
     """Prometheus metrics endpoint"""
     return Response(content=prometheus_latest_text(), media_type="text/plain")
 
+@app.post("/debug/collect-system-metrics")
+def collect_system_metrics():
+    """Debug endpoint to manually trigger system metrics collection"""
+    try:
+        metrics_collector.collect_system_metrics_now()
+        return {"success": True, "message": "System metrics collected successfully"}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
 
 class PipelineInput(BaseModel):
     customerName: str

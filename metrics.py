@@ -283,36 +283,49 @@ class MetricsCollector:
     # ---------- background: system metrics ----------
     def _start_system_metrics_collector(self) -> None:
         def collect():
+            # Initialize CPU usage measurement
+            psutil.cpu_percent(interval=None)  # Initialize without blocking
+            
             while True:
                 try:
-                    cpu_percent = psutil.cpu_percent(interval=1)
-                    CPU_USAGE.set(cpu_percent)
-                    self.set_cpu_usage_percent(cpu_percent)
+                    # Get CPU usage without blocking
+                    cpu_percent = psutil.cpu_percent(interval=None)
+                    if cpu_percent is not None and cpu_percent >= 0:
+                        CPU_USAGE.set(cpu_percent)
+                        self.set_cpu_usage_percent(cpu_percent)
+                        print(f"DEBUG: CPU usage set to {cpu_percent}%")  # Debug log
                     
+                    # Get memory usage
                     mem = psutil.virtual_memory()
-                    MEMORY_USAGE.set(mem.used)
-                    MEMORY_USAGE_PERCENT.set(mem.percent)
-                    self.set_memory_usage_percent(mem.percent)
+                    if mem.percent is not None and mem.percent >= 0:
+                        MEMORY_USAGE.set(mem.used)
+                        MEMORY_USAGE_PERCENT.set(mem.percent)
+                        self.set_memory_usage_percent(mem.percent)
+                        print(f"DEBUG: Memory usage set to {mem.percent}%")  # Debug log
 
+                    # GPU usage (optional)
                     try:
                         import GPUtil  # type: ignore
-
                         gpus = GPUtil.getGPUs()
                         if gpus:
                             gpu = gpus[0]
                             GPU_USAGE.set(gpu.load * 100.0)
                             GPU_MEMORY.set(gpu.memoryUsed * 1024 * 1024)
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        print(f"DEBUG: GPU monitoring not available: {e}")
 
                     # Update system-level metrics
                     self._update_system_metrics()
 
-                    time.sleep(4)
-                except Exception:
-                    time.sleep(4)
+                    time.sleep(5)  # Collect every 5 seconds
+                except Exception as e:
+                    print(f"DEBUG: Error in system metrics collection: {e}")
+                    time.sleep(5)
 
-        threading.Thread(target=collect, daemon=True).start()
+        # Start the background thread
+        thread = threading.Thread(target=collect, daemon=True)
+        thread.start()
+        print("DEBUG: System metrics collector started")
 
     def _update_system_metrics(self) -> None:
         """Update system-level metrics that don't change frequently"""
@@ -480,6 +493,27 @@ class MetricsCollector:
 
     def set_memory_usage_percent(self, percent: float) -> None:
         MEMORY_USAGE_PERCENT.set(max(0, min(100, percent)))
+    
+    def collect_system_metrics_now(self) -> None:
+        """Manually trigger system metrics collection for testing"""
+        try:
+            # Get CPU usage
+            cpu_percent = psutil.cpu_percent(interval=None)
+            if cpu_percent is not None and cpu_percent >= 0:
+                CPU_USAGE.set(cpu_percent)
+                self.set_cpu_usage_percent(cpu_percent)
+                print(f"Manual collection: CPU usage set to {cpu_percent}%")
+            
+            # Get memory usage
+            mem = psutil.virtual_memory()
+            if mem.percent is not None and mem.percent >= 0:
+                MEMORY_USAGE.set(mem.used)
+                MEMORY_USAGE_PERCENT.set(mem.percent)
+                self.set_memory_usage_percent(mem.percent)
+                print(f"Manual collection: Memory usage set to {mem.percent}%")
+                
+        except Exception as e:
+            print(f"Error in manual system metrics collection: {e}")
 
     def set_qos_performance_score(self, customer: str, app: str, score: float) -> None:
         QOS_PERFORMANCE_SCORE.labels(customer, app).set(max(0, min(100, score)))
