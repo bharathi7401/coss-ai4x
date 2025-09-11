@@ -284,10 +284,11 @@ class MetricsCollector:
     def _start_system_metrics_collector(self) -> None:
         """Start background thread to collect system metrics"""
         def collect_system_metrics():
+            psutil.cpu_percent(interval=None)
             while True:
                 try:
                     # CPU usage
-                    cpu_percent = psutil.cpu_percent(interval=1)
+                    cpu_percent = psutil.cpu_percent(interval=None)
                     CPU_USAGE.set(cpu_percent)
                     
                     # Memory usage
