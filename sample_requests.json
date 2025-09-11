@@ -162,5 +162,95 @@
         "language": "hi"
       }
     }
-  ]
+  ],
+  "individual_service_requests": {
+    "nmt_requests": [
+      {
+        "customerName": "cust1",
+        "customerAppName": "voice-assistant (cust1)",
+        "text": "வணக்கம்! என் பெயர் ராஜா. நான் சென்னையில் வசிக்கிறேன்.",
+        "target_language": "en"
+      },
+      {
+        "customerName": "cust1",
+        "customerAppName": "voice-assistant (cust1)",
+        "text": "नमस्ते! मेरा नाम राजेश है। मैं दिल्ली में रहता हूं।",
+        "target_language": "en"
+      },
+      {
+        "customerName": "cust2",
+        "customerAppName": "chat-support (cust2)",
+        "text": "Hello! My name is John. I live in Mumbai.",
+        "target_language": "hi"
+      },
+      {
+        "customerName": "cust2",
+        "customerAppName": "chat-support (cust2)",
+        "text": "Good morning! How are you today?",
+        "target_language": "ta"
+      }
+    ],
+    "tts_requests": [
+      {
+        "customerName": "cust1",
+        "customerAppName": "voice-assistant (cust1)",
+        "text": "வணக்கம்! என் பெயர் ராஜா. நான் சென்னையில் வசிக்கிறேன்.",
+        "language": "ta",
+        "gender": "female"
+      },
+      {
+        "customerName": "cust1",
+        "customerAppName": "voice-assistant (cust1)",
+        "text": "नमस्ते! मेरा नाम राजेश है। मैं दिल्ली में रहता हूं।",
+        "language": "hi",
+        "gender": "male"
+      },
+      {
+        "customerName": "cust2",
+        "customerAppName": "chat-support (cust2)",
+        "text": "Hello! Welcome to our customer support. How can I help you today?",
+        "language": "en",
+        "gender": "female"
+      },
+      {
+        "customerName": "cust2",
+        "customerAppName": "chat-support (cust2)",
+        "text": "Thank you for contacting us. We will resolve your issue soon.",
+        "language": "en",
+        "gender": "male"
+      }
+    ],
+    "llm_requests": [
+      {
+        "customerName": "cust1",
+        "customerAppName": "voice-assistant (cust1)",
+        "text": "What is the weather like in Chennai today?"
+      },
+      {
+        "customerName": "cust1",
+        "customerAppName": "voice-assistant (cust1)",
+        "text": "Tell me about the latest technology trends in artificial intelligence."
+      },
+      {
+        "customerName": "cust2",
+        "customerAppName": "chat-support (cust2)",
+        "text": "How can I reset my password?"
+      },
+      {
+        "customerName": "cust2",
+        "customerAppName": "chat-support (cust2)",
+        "text": "What are your business hours?"
+      },
+      {
+        "customerName": "cust1",
+        "customerAppName": "voice-assistant (cust1)",
+        "text": "Calculate 25 multiplied by 4 plus 10."
+      },
+      {
+        "customerName": "cust2",
+        "customerAppName": "chat-support (cust2)",
+        "text": "What is the capital of France?"
+      }
+    ]
+  }
 }

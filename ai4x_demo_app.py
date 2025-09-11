@@ -550,6 +550,167 @@ def get_data_processed_metrics():
         "byCustomer": customers
     }
 
+# ----------------------------
+# Pydantic Models for Individual Services
+# ----------------------------
+class NMTInput(BaseModel):
+    customerName: str
+    customerAppName: str
+    text: str
+    target_language: str = "en"
+
+class TTSInput(BaseModel):
+    customerName: str
+    customerAppName: str
+    text: str
+    language: str = "en"
+    gender: str = "female"
+
+class LLMInput(BaseModel):
+    customerName: str
+    customerAppName: str
+    text: str
+
+# ----------------------------
+# Individual Service Endpoints
+# ----------------------------
+@app.post("/nmt/translate")
+def nmt_translate(payload: NMTInput):
+    """NMT translation endpoint with automatic language detection"""
+    customer = payload.customerName
+    appname = payload.customerAppName
+    text = payload.text
+    target_lang = payload.target_language
+    
+    with metrics_collector.request_timer(customer, appname, "/nmt/translate") as rid:
+        try:
+            # Track service request
+            metrics_collector.service_request("nmt", customer, appname)
+            
+            # Auto-detect source language
+            source_lang = detect_language_from_text(text)
+            
+            # Start component timing
+            with metrics_collector.component_timer(rid, "NMT"):
+                result = nmt_service.translate_text(text, source_lang, target_lang)
+            
+            # Track metrics if successful
+            if result.get("success", False):
+                translated_text = result.get("translated_text", "")
+                metrics_collector.nmt_chars(customer, appname, source_lang, target_lang, len(translated_text))
+                
+                return {
+                    "success": True,
+                    "translated_text": translated_text,
+                    "detected_source_language": source_lang,
+                    "target_language": target_lang,
+                    "character_count": len(translated_text)
+                }
+            else:
+                # Track error
+                metrics_collector.end_component(rid, "NMT", success=False)
+                return {
+                    "success": False,
+                    "error": result.get("error", "Translation failed"),
+                    "translated_text": text,  # Return original text as fallback
+                    "detected_source_language": source_lang,
+                    "target_language": target_lang
+                }
+                
+        except Exception as e:
+            metrics_collector.end_component(rid, "NMT", success=False)
+            raise HTTPException(status_code=500, detail=f"NMT service error: {str(e)}")
+
+@app.post("/tts/speak")
+def tts_speak(payload: TTSInput):
+    """TTS speech synthesis endpoint"""
+    customer = payload.customerName
+    appname = payload.customerAppName
+    text = payload.text
+    language = payload.language
+    gender = payload.gender
+    
+    with metrics_collector.request_timer(customer, appname, "/tts/speak") as rid:
+        try:
+            # Track service request
+            metrics_collector.service_request("tts", customer, appname)
+            
+            # Start component timing
+            with metrics_collector.component_timer(rid, "TTS"):
+                result = tts_service.text_to_speech(text, language, gender)
+            
+            # Track metrics if successful
+            if result.get("success", False):
+                audio_content = result.get("audio_content", "")
+                metrics_collector.tts_chars(customer, appname, language, len(text))
+                
+                return {
+                    "success": True,
+                    "audio_content": audio_content,
+                    "language": language,
+                    "gender": gender,
+                    "character_count": len(text)
+                }
+            else:
+                # Track error
+                metrics_collector.end_component(rid, "TTS", success=False)
+                return {
+                    "success": False,
+                    "error": result.get("error", "TTS synthesis failed"),
+                    "audio_content": None,
+                    "language": language,
+                    "gender": gender
+                }
+                
+        except Exception as e:
+            metrics_collector.end_component(rid, "TTS", success=False)
+            raise HTTPException(status_code=500, detail=f"TTS service error: {str(e)}")
+
+@app.post("/llm/generate")
+def llm_generate(payload: LLMInput):
+    """LLM text generation endpoint"""
+    customer = payload.customerName
+    appname = payload.customerAppName
+    text = payload.text
+    
+    with metrics_collector.request_timer(customer, appname, "/llm/generate") as rid:
+        try:
+            # Track service request
+            metrics_collector.service_request("llm", customer, appname)
+            
+            # Start component timing
+            with metrics_collector.component_timer(rid, "LLM"):
+                result = llm_service.process_query(text)
+            
+            # Track metrics if successful
+            if result.get("success", False):
+                response_text = result.get("response", "")
+                total_tokens = result.get("total_tokens", 0)
+                metrics_collector.llm_tokens(customer, appname, "gemini-2.0-flash", total_tokens)
+                
+                return {
+                    "success": True,
+                    "response": response_text,
+                    "intent": result.get("intent", "general"),
+                    "confidence": result.get("confidence", 0.0),
+                    "parameters": result.get("parameters", {}),
+                    "token_count": total_tokens
+                }
+            else:
+                # Track error
+                metrics_collector.end_component(rid, "LLM", success=False)
+                return {
+                    "success": False,
+                    "error": result.get("error", "LLM generation failed"),
+                    "response": "I'm sorry, I couldn't process your request.",
+                    "intent": "general",
+                    "confidence": 0.0
+                }
+                
+        except Exception as e:
+            metrics_collector.end_component(rid, "LLM", success=False)
+            raise HTTPException(status_code=500, detail=f"LLM service error: {str(e)}")
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("ai4x_demo_app:app", host="0.0.0.0", port=8000, reload=False)
