@@ -24,7 +24,7 @@
       {
         "datasource": {
           "type": "prometheus",
-          "uid": "aexq62q79jq4gd"
+          "uid": "eex51se1hdudcb"
         },
         "description": "Average uptime of different services ( NMT, TTS, LLM, ASR )",
         "fieldConfig": {
@@ -85,7 +85,7 @@
           {
             "datasource": {
               "type": "prometheus",
-              "uid": "aexq62q79jq4gd"
+              "uid": "eex51se1hdudcb"
             },
             "editorMode": "code",
             "expr": "avg(ai4x_qos_availability_percent{time_window=\"1h\"})",
@@ -100,7 +100,7 @@
       {
         "datasource": {
           "type": "prometheus",
-          "uid": "aexq62q79jq4gd"
+          "uid": "eex51se1hdudcb"
         },
         "description": "Response time for completed reequests end to end",
         "fieldConfig": {
@@ -159,7 +159,7 @@
           {
             "datasource": {
               "type": "prometheus",
-              "uid": "aexq62q79jq4gd"
+              "uid": "eex51se1hdudcb"
             },
             "editorMode": "code",
             "expr": "ai4x_system_avg_response_time_seconds * 100  # in milliseconds",
@@ -174,7 +174,7 @@
       {
         "datasource": {
           "type": "prometheus",
-          "uid": "aexq62q79jq4gd"
+          "uid": "eex51se1hdudcb"
         },
         "fieldConfig": {
           "defaults": {
@@ -234,7 +234,7 @@
           {
             "datasource": {
               "type": "prometheus",
-              "uid": "aexq62q79jq4gd"
+              "uid": "eex51se1hdudcb"
             },
             "editorMode": "code",
             "expr": "ai4x_system_error_rate_percent",
@@ -249,7 +249,7 @@
       {
         "datasource": {
           "type": "prometheus",
-          "uid": "aexq62q79jq4gd"
+          "uid": "eex51se1hdudcb"
         },
         "fieldConfig": {
           "defaults": {
@@ -303,7 +303,7 @@
           {
             "datasource": {
               "type": "prometheus",
-              "uid": "aexq62q79jq4gd"
+              "uid": "eex51se1hdudcb"
             },
             "editorMode": "code",
             "expr": "sum(rate(ai4x_requests_total{customer=\"cust1\"}[1m])) * 60",
@@ -318,7 +318,7 @@
       {
         "datasource": {
           "type": "prometheus",
-          "uid": "aexq62q79jq4gd"
+          "uid": "eex51se1hdudcb"
         },
         "fieldConfig": {
           "defaults": {
@@ -376,7 +376,7 @@
           {
             "datasource": {
               "type": "prometheus",
-              "uid": "aexq62q79jq4gd"
+              "uid": "eex51se1hdudcb"
             },
             "editorMode": "code",
             "expr": "avg(ai4x_system_sla_compliance_percent)",
@@ -391,7 +391,7 @@
       {
         "datasource": {
           "type": "prometheus",
-          "uid": "aexq62q79jq4gd"
+          "uid": "eex51se1hdudcb"
         },
         "fieldConfig": {
           "defaults": {
@@ -449,7 +449,7 @@
           {
             "datasource": {
               "type": "prometheus",
-              "uid": "aexq62q79jq4gd"
+              "uid": "eex51se1hdudcb"
             },
             "editorMode": "code",
             "expr": "ai4x_qos_performance_score{customer=\"cust1\",app=\"llm-app\"}",
@@ -462,7 +462,7 @@
           {
             "datasource": {
               "type": "prometheus",
-              "uid": "aexq62q79jq4gd"
+              "uid": "eex51se1hdudcb"
             },
             "editorMode": "code",
             "expr": "ai4x_qos_performance_score{customer=\"cust1\",app=\"nmt-app\"}",
@@ -479,7 +479,7 @@
       {
         "datasource": {
           "type": "prometheus",
-          "uid": "aexq62q79jq4gd"
+          "uid": "eex51se1hdudcb"
         },
         "fieldConfig": {
           "defaults": {
@@ -561,7 +561,7 @@
           {
             "datasource": {
               "type": "prometheus",
-              "uid": "aexq62q79jq4gd"
+              "uid": "eex51se1hdudcb"
             },
             "editorMode": "code",
             "expr": "ai4x_qos_availability_percent",
@@ -578,7 +578,7 @@
       {
         "datasource": {
           "type": "prometheus",
-          "uid": "aexq62q79jq4gd"
+          "uid": "eex51se1hdudcb"
         },
         "fieldConfig": {
           "defaults": {
@@ -629,7 +629,7 @@
           {
             "datasource": {
               "type": "prometheus",
-              "uid": "aexq62q79jq4gd"
+              "uid": "eex51se1hdudcb"
             },
             "editorMode": "code",
             "expr": "ai4x_system_sla_compliance_percent{sla_type=~\"availability|response_time|error_rate\"}",
@@ -644,7 +644,7 @@
       {
         "datasource": {
           "type": "prometheus",
-          "uid": "aexq62q79jq4gd"
+          "uid": "eex51se1hdudcb"
         },
         "fieldConfig": {
           "defaults": {
@@ -727,7 +727,7 @@
           {
             "datasource": {
               "type": "prometheus",
-              "uid": "aexq62q79jq4gd"
+              "uid": "eex51se1hdudcb"
             },
             "disableTextWrap": false,
             "editorMode": "builder",
@@ -748,7 +748,7 @@
       {
         "datasource": {
           "type": "prometheus",
-          "uid": "aexq62q79jq4gd"
+          "uid": "eex51se1hdudcb"
         },
         "fieldConfig": {
           "defaults": {
@@ -832,7 +832,7 @@
           {
             "datasource": {
               "type": "prometheus",
-              "uid": "aexq62q79jq4gd"
+              "uid": "eex51se1hdudcb"
             },
             "disableTextWrap": false,
             "editorMode": "code",
@@ -847,7 +847,7 @@
           {
             "datasource": {
               "type": "prometheus",
-              "uid": "aexq62q79jq4gd"
+              "uid": "eex51se1hdudcb"
             },
             "disableTextWrap": false,
             "editorMode": "code",
@@ -863,7 +863,7 @@
           {
             "datasource": {
               "type": "prometheus",
-              "uid": "aexq62q79jq4gd"
+              "uid": "eex51se1hdudcb"
             },
             "disableTextWrap": false,
             "editorMode": "code",
@@ -883,7 +883,7 @@
       {
         "datasource": {
           "type": "prometheus",
-          "uid": "aexq62q79jq4gd"
+          "uid": "eex51se1hdudcb"
         },
         "fieldConfig": {
           "defaults": {
@@ -970,7 +970,7 @@
           {
             "datasource": {
               "type": "prometheus",
-              "uid": "aexq62q79jq4gd"
+              "uid": "eex51se1hdudcb"
             },
             "editorMode": "code",
             "expr": "ai4x_qos_availability_percent{time_window=\"1h\"}",
