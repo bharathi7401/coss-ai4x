@@ -11,7 +11,8 @@ class LLMService:
     def __init__(self):
         # Configure Gemini API
         # Note: Replace with your actual API key
-        genai.configure(api_key="AIzaSyBuVOEa433X8-rmsEsYtN5OgwyHN_lMz38")
+        genai.configure(api_key="AIzaSyC-8JdQGzato50LGjY438C4qEaBY20xj8o")
+        print("Gemini nesw API key configured")
         
         # Configure model - Google Search is available through the API automatically
         self.model = genai.GenerativeModel('gemini-2.0-flash')
@@ -144,7 +145,8 @@ class LLMService:
                 "response": "I'm sorry, I encountered an error processing your request.",
                 "location": "",
                 "confidence": 0.0,
-                "parameters": {}
+                "parameters": {},
+                "total_tokens": 0
             }
     
     def _fallback_parse(self, query: str, llm_response: str) -> Dict[str, Any]:
@@ -193,7 +195,8 @@ class LLMService:
             "location": parameters.get("location", ""),
             "confidence": 0.6,
             "parameters": parameters,
-            "raw_response": "Fallback response - LLM response could not be parsed"
+            "raw_response": "Fallback response - LLM response could not be parsed",
+            "total_tokens": 0
         }
     
     def format_weather_response(self, weather_data: Dict[str, Any], location: str) -> str:
