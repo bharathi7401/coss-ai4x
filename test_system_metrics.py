@@ -12,41 +12,19 @@ def test_system_metrics():
     
     base_url = "http://localhost:8000"
     
-    print("\n1. Testing manual system metrics collection...")
-    try:
-        response = requests.post(f"{base_url}/debug/collect-system-metrics")
-        if response.status_code == 200:
-            result = response.json()
-            print(f"  ✅ Manual collection: {result}")
-        else:
-            print(f"  ❌ Manual collection failed: {response.status_code}")
-    except Exception as e:
-        print(f"  ❌ Error calling manual collection: {e}")
-    
-    print("\n2. Checking current metrics...")
+    print("\n1. Checking initial system metrics...")
     check_system_metrics()
     
-    print("\n3. Waiting for automatic collection (10 seconds)...")
+    print("\n2. Waiting for automatic collection (10 seconds)...")
     time.sleep(10)
     
-    print("\n4. Checking metrics after automatic collection...")
+    print("\n3. Checking metrics after automatic collection...")
     check_system_metrics()
     
-    print("\n5. Testing multiple manual collections...")
-    for i in range(3):
-        print(f"  Collection {i+1}:")
-        try:
-            response = requests.post(f"{base_url}/debug/collect-system-metrics")
-            if response.status_code == 200:
-                result = response.json()
-                print(f"    ✅ {result}")
-            else:
-                print(f"    ❌ Failed: {response.status_code}")
-        except Exception as e:
-            print(f"    ❌ Error: {e}")
-        time.sleep(2)
+    print("\n4. Waiting for more automatic collection (10 seconds)...")
+    time.sleep(10)
     
-    print("\n6. Final metrics check...")
+    print("\n5. Final metrics check...")
     check_system_metrics()
 
 def check_system_metrics():
@@ -146,6 +124,6 @@ if __name__ == "__main__":
     print("✅ System metrics test completed!")
     print("\nTroubleshooting tips:")
     print("- If CPU/Memory show 0%, check if the background thread is running")
-    print("- Look for DEBUG messages in the application logs")
-    print("- Try the manual collection endpoint: POST /debug/collect-system-metrics")
     print("- Check if psutil is installed: pip install psutil")
+    print("- Verify the /metrics endpoint: curl http://localhost:8000/metrics")
+    print("- System metrics are collected automatically every 5 seconds")
