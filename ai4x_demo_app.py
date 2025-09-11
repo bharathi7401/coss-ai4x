@@ -90,7 +90,7 @@ init_db()
 
 # Initialize system metrics
 metrics_collector.set_active_tenants(2)  # cust1 and cust2
-metrics_collector.set_service_count("total", 4)  # NMT, LLM, TTS, ASR
+metrics_collector.set_service_count("total", 3)  # NMT, LLM, TTS, ASR
 metrics_collector.set_service_count("nmt", 1)
 metrics_collector.set_service_count("llm", 1)
 metrics_collector.set_service_count("tts", 1)
