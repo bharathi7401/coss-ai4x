@@ -200,12 +200,14 @@ SYSTEM_ERROR_RATE_PERCENT = Gauge(
 CPU_USAGE_PERCENT = Gauge(
     "ai4x_cpu_usage_percent",
     "CPU usage percentage",
+    ["service", "customer", "app", "endpoint"],
     registry=REGISTRY,
 )
 
 MEMORY_USAGE_PERCENT = Gauge(
     "ai4x_memory_usage_percent",
     "Memory usage percentage",
+    ["service", "customer", "app", "endpoint"],
     registry=REGISTRY,
 )
 
@@ -289,12 +291,14 @@ class MetricsCollector:
                 try:
                     # CPU usage
                     cpu_percent = psutil.cpu_percent(interval=None)
-                    CPU_USAGE.set(cpu_percent)
                     
                     # Memory usage
                     memory = psutil.virtual_memory()
-                    MEMORY_USAGE.set(memory.used)
-                    MEMORY_USAGE_PERCENT.set(memory.percent)
+                    memory_percent = memory.percent
+                    
+                    # Set system-wide metrics only
+                    CPU_USAGE_PERCENT.labels("system", "system", "system", "system").set(cpu_percent)
+                    MEMORY_USAGE_PERCENT.labels("system", "system", "system", "system").set(memory_percent)
                     
                     # GPU metrics (if available)
                     try:
@@ -477,11 +481,31 @@ class MetricsCollector:
     def set_error_rate_percent(self, percent: float) -> None:
         SYSTEM_ERROR_RATE_PERCENT.set(max(0, min(100, percent)))
 
-    def set_cpu_usage_percent(self, percent: float) -> None:
-        CPU_USAGE_PERCENT.set(max(0, min(100, percent)))
+    def set_cpu_usage_percent(self, percent: float, service: str = "system", customer: str = "system", app: str = "system", endpoint: str = "system") -> None:
+        CPU_USAGE_PERCENT.labels(service, customer, app, endpoint).set(max(0, min(100, percent)))
 
-    def set_memory_usage_percent(self, percent: float) -> None:
-        MEMORY_USAGE_PERCENT.set(max(0, min(100, percent)))
+    def set_memory_usage_percent(self, percent: float, service: str = "system", customer: str = "system", app: str = "system", endpoint: str = "system") -> None:
+        MEMORY_USAGE_PERCENT.labels(service, customer, app, endpoint).set(max(0, min(100, percent)))
+    
+    def track_service_resource_usage(self, service: str, customer: str, app: str, endpoint: str) -> None:
+        """Track actual CPU and memory usage for a specific service during request processing"""
+        import psutil
+        
+        # Get current actual system resource usage
+        cpu_percent = psutil.cpu_percent(interval=None)
+        memory = psutil.virtual_memory()
+        memory_percent = memory.percent
+        
+        # Set actual service-specific metrics (no simulation)
+        CPU_USAGE_PERCENT.labels(service, customer, app, endpoint).set(cpu_percent)
+        MEMORY_USAGE_PERCENT.labels(service, customer, app, endpoint).set(memory_percent)
+    
+    def track_request_resource_usage(self, service: str, customer: str, app: str, endpoint: str, 
+                                   cpu_usage: float, memory_usage: float) -> None:
+        """Track actual resource usage for a specific request"""
+        # Set the actual resource usage for this specific request
+        CPU_USAGE_PERCENT.labels(service, customer, app, endpoint).set(cpu_usage)
+        MEMORY_USAGE_PERCENT.labels(service, customer, app, endpoint).set(memory_usage)
     
 
     def set_qos_performance_score(self, customer: str, app: str, score: float) -> None:

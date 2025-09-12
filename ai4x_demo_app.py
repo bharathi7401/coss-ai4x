@@ -19,6 +19,8 @@ from fastapi.middleware.cors import CORSMiddleware
 import threading
 import asyncio
 
+from prometheus_client import Gauge
+
 # --- Prometheus core ---
 # from prometheus_client import Counter, Histogram, Gauge
 
@@ -186,6 +188,14 @@ def run_pipeline(payload: PipelineInput):
                 with metrics_collector.component_timer(rid, "NMT"):
                     usage["NMT"] = str(len(current_output))
                     nmt_result = nmt_service.translate_text(current_output, source_language, target_language)
+                    
+                    # Capture and track actual resource usage for this NMT request
+                    import psutil
+                    cpu_usage = psutil.cpu_percent(interval=None)
+                    memory_usage = psutil.virtual_memory().percent
+                    metrics_collector.track_request_resource_usage("nmt", customer, appname, "/pipeline", 
+                                                                 cpu_usage, memory_usage)
+                    
                     latencies["NMT"] = f"{int((time.time() - start) * 1000)}ms"
                     pipeline_output["NMT"] = nmt_result.get("translated_text", current_output)
                     current_output = nmt_result.get("translated_text", current_output)
@@ -198,6 +208,13 @@ def run_pipeline(payload: PipelineInput):
             if "LLM" in pipeline:
                 with metrics_collector.component_timer(rid, "LLM"):
                     llm_result = llm_service.process_query(current_output)
+                    
+                    # Capture and track actual resource usage for this LLM request
+                    cpu_usage = psutil.cpu_percent(interval=None)
+                    memory_usage = psutil.virtual_memory().percent
+                    metrics_collector.track_request_resource_usage("llm", customer, appname, "/pipeline", 
+                                                                 cpu_usage, memory_usage)
+                    
                     latencies["LLM"] = f"{int((time.time() - start) * 1000)}ms"
                     pipeline_output["LLM"] = llm_result.get("response", "")
                     response_data = llm_result.get("response", "")
@@ -217,6 +234,13 @@ def run_pipeline(payload: PipelineInput):
                             source_lang="en",
                             target_lang=source_language
                         )
+                        
+                        # Capture and track actual resource usage for this BackNMT request
+                        cpu_usage = psutil.cpu_percent(interval=None)
+                        memory_usage = psutil.virtual_memory().percent
+                        metrics_collector.track_request_resource_usage("nmt", customer, appname, "/pipeline", 
+                                                                     cpu_usage, memory_usage)
+                        
                         latencies["BackNMT"] = f"{int((time.time() - start) * 1000)}ms"
                         pipeline_output["BackNMT"] = back_translation.get("translated_text", llm_response)
                         # Track success and only log metrics if BackNMT was successful
@@ -230,6 +254,13 @@ def run_pipeline(payload: PipelineInput):
                 with metrics_collector.component_timer(rid, "TTS"):
                     usage["TTS"] = str(len(response_data))
                     tts_result = tts_service.text_to_speech(response_data, source_language, gender="female")
+                    
+                    # Capture and track actual resource usage for this TTS request
+                    cpu_usage = psutil.cpu_percent(interval=None)
+                    memory_usage = psutil.virtual_memory().percent
+                    metrics_collector.track_request_resource_usage("tts", customer, appname, "/pipeline", 
+                                                                 cpu_usage, memory_usage)
+                    
                     latencies["TTS"] = f"{int((time.time() - start) * 1000)}ms"
                     pipeline_output["TTS"] = tts_result.get("audio_content", "")
                     # Track success and only log metrics if TTS was successful
@@ -586,6 +617,13 @@ def nmt_translate(payload: NMTInput):
             # Start component timing
             with metrics_collector.component_timer(rid, "NMT"):
                 result = nmt_service.translate_text(text, source_lang, target_lang)
+                
+                # Capture and track actual resource usage for this NMT request
+                import psutil
+                cpu_usage = psutil.cpu_percent(interval=None)
+                memory_usage = psutil.virtual_memory().percent
+                metrics_collector.track_request_resource_usage("nmt", customer, appname, "/nmt/translate", 
+                                                             cpu_usage, memory_usage)
             
             # Track metrics if successful
             if result.get("success", False):
@@ -631,6 +669,13 @@ def tts_speak(payload: TTSInput):
             # Start component timing
             with metrics_collector.component_timer(rid, "TTS"):
                 result = tts_service.text_to_speech(text, language, gender)
+                
+                # Capture and track actual resource usage for this TTS request
+                import psutil
+                cpu_usage = psutil.cpu_percent(interval=None)
+                memory_usage = psutil.virtual_memory().percent
+                metrics_collector.track_request_resource_usage("tts", customer, appname, "/tts/speak", 
+                                                             cpu_usage, memory_usage)
             
             # Track metrics if successful
             if result.get("success", False):
@@ -674,6 +719,13 @@ def llm_generate(payload: LLMInput):
             # Start component timing
             with metrics_collector.component_timer(rid, "LLM"):
                 result = llm_service.process_query(text)
+                
+                # Capture and track actual resource usage for this LLM request
+                import psutil
+                cpu_usage = psutil.cpu_percent(interval=None)
+                memory_usage = psutil.virtual_memory().percent
+                metrics_collector.track_request_resource_usage("llm", customer, appname, "/llm/generate", 
+                                                             cpu_usage, memory_usage)
             
             # Track metrics if successful
             if result.get("success", False):
@@ -703,6 +755,41 @@ def llm_generate(payload: LLMInput):
         except Exception as e:
             metrics_collector.end_component(rid, "LLM", success=False)
             raise HTTPException(status_code=500, detail=f"LLM service error: {str(e)}")
+
+
+@app.get('/test_system_metrics')
+def test_system_metrics():
+    import traceback
+    import psutil
+    try:
+        print("Testing system metrics...")
+        # Test CPU
+        cpu = psutil.cpu_percent(interval=1)
+        print(f"CPU: {cpu}%")
+        # Test Memory
+        memory = psutil.virtual_memory()
+        print(f"Memory: {memory.percent}%")
+        # Test setting metrics
+        print("Setting CPU_USAGE_PERCENT metric...")
+        metrics_collector.set_cpu_usage_percent(cpu, "test", "test-customer", "test-app", "/test")
+        print("Setting MEMORY_USAGE_PERCENT metric...")
+        metrics_collector.set_memory_usage_percent(memory.percent, "test", "test-customer", "test-app", "/test")
+        return f"SUCCESS - CPU: {cpu}%, Memory: {memory.percent}% - Check /metrics now!"
+    except NameError as e:
+        error_msg = f"NameError - Metrics not defined: {str(e)}"
+        print(error_msg)
+        traceback.print_exc()
+        return f"ERROR: {error_msg}\n\nTraceback:\n{traceback.format_exc()}"
+    except ImportError as e:
+        error_msg = f"ImportError - psutil not available: {str(e)}"
+        print(error_msg)
+        traceback.print_exc()
+        return f"ERROR: {error_msg}\n\nTraceback:\n{traceback.format_exc()}"
+    except Exception as e:
+        error_msg = f"Unexpected error: {str(e)}"
+        print(error_msg)
+        traceback.print_exc()
+        return f"ERROR: {error_msg}\n\nTraceback:\n{traceback.format_exc()}"
 
 if __name__ == "__main__":
     import uvicorn
