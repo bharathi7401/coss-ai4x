@@ -123,7 +123,7 @@ QOS_AVAILABILITY_PERCENT = Gauge(
 QOS_PERFORMANCE_SCORE = Gauge(
     "ai4x_qos_performance_score",
     "QoS performance score for services",
-    ["customer", "app"],
+    ["customer", "app", "service", "endpoint"],
     registry=REGISTRY,
 )
 
@@ -142,15 +142,7 @@ SYSTEM_AVAILABILITY_FAILURES = Counter(
     registry=REGISTRY,
 )
 
-# Initialize QoS performance scores to 100% (perfect performance) for dashboard visibility
-QOS_PERFORMANCE_SCORE.labels("cust1", "voice-assistant (cust1)").set(100.0)
-QOS_PERFORMANCE_SCORE.labels("cust1", "nmt-app").set(100.0)
-QOS_PERFORMANCE_SCORE.labels("cust1", "llm-app").set(100.0)
-QOS_PERFORMANCE_SCORE.labels("cust1", "tts-app").set(100.0)
-QOS_PERFORMANCE_SCORE.labels("cust2", "chat-support (cust2)").set(100.0)
-QOS_PERFORMANCE_SCORE.labels("cust2", "nmt-app").set(100.0)
-QOS_PERFORMANCE_SCORE.labels("cust2", "llm-app").set(100.0)
-QOS_PERFORMANCE_SCORE.labels("cust2", "tts-app").set(100.0)
+# QoS performance scores will be computed dynamically based on real requests
 
 # Initialize system uptime to 100% (perfect uptime) for dashboard visibility
 SYSTEM_UPTIME_PERCENT.labels("1h").set(100.0)
@@ -169,7 +161,7 @@ SYSTEM_AVAILABILITY_FAILURES.labels("timeout", "service").inc(0)
 SYSTEM_SLA_COMPLIANCE_PERCENT = Gauge(
     "ai4x_system_sla_compliance_percent",
     "SLA compliance percentage",
-    ["sla_type"],
+    ["sla_type", "customer", "app", "service", "endpoint"],
     registry=REGISTRY,
 )
 
@@ -275,6 +267,7 @@ class MetricsCollector:
 
     def __init__(self) -> None:
         self._req: Dict[str, Dict] = {}
+        self._completed_requests: Dict[str, Dict] = {}  # Store completed requests for SLA calculation
         self._throughput_counter: Dict[str, int] = {}
         self._last_throughput_update = time.time()
         # Track request success/failure for error rate calculation
@@ -338,10 +331,7 @@ class MetricsCollector:
         self.set_qos_availability("24h", 100.0)
         self.set_qos_availability("7d", 100.0)
         
-        # Set SLA compliance (default to 100% until requests are made)
-        self.set_sla_compliance("availability", 100.0)
-        self.set_sla_compliance("response_time", 100.0)
-        self.set_sla_compliance("throughput", 100.0)
+        # SLA compliance will be computed dynamically based on real requests
         
         # Set average response time (default to 0 until requests are made)
         self.set_avg_response_time(0.0)
@@ -353,14 +343,17 @@ class MetricsCollector:
         self.set_error_rate_percent(0.0)
 
     # ---------- request helpers ----------
-    def start_request(self, customer: str, app: str, endpoint: str) -> str:
-        rid = f"{customer}:{app}:{endpoint}:{int(time.time() * 1e6)}"
+    def start_request(self, customer: str, app: str, endpoint: str, service: str = "pipeline") -> str:
+        rid = f"{customer}:{app}:{endpoint}:{service}:{int(time.time() * 1e6)}"
         self._req[rid] = {
             "t0": time.time(),
             "customer": customer,
             "app": app,
             "endpoint": endpoint,
+            "service": service,
             "components": {},
+            "completed": False,
+            "success": True
         }
         return rid
 
@@ -372,6 +365,7 @@ class MetricsCollector:
         customer = d["customer"]
         app = d["app"]
         ep = d["endpoint"]
+        service = d.get("service", "pipeline")
 
         status = (
             "success"
@@ -382,6 +376,22 @@ class MetricsCollector:
             if status_code >= 500
             else "unknown"
         )
+        
+        # Mark request as completed and track success/failure
+        d["completed"] = True
+        d["success"] = (status == "success")
+        d["duration"] = dur
+        d["status_code"] = status_code
+        
+        # Store completed request for SLA calculation
+        self._completed_requests[rid] = d
+        
+        # Clean up old completed requests (keep only last 1000)
+        if len(self._completed_requests) > 1000:
+            # Remove oldest 200 requests
+            old_requests = list(self._completed_requests.keys())[:200]
+            for old_rid in old_requests:
+                del self._completed_requests[old_rid]
 
         REQUEST_COUNT.labels(customer, app, ep, status).inc()
         REQUEST_DURATION.labels(customer, app, ep).observe(dur)
@@ -469,8 +479,8 @@ class MetricsCollector:
     def set_qos_availability(self, time_window: str, percent: float) -> None:
         QOS_AVAILABILITY_PERCENT.labels(time_window=time_window).set(max(0, min(100, percent)))
 
-    def set_sla_compliance(self, sla_type: str, percent: float) -> None:
-        SYSTEM_SLA_COMPLIANCE_PERCENT.labels(sla_type=sla_type).set(max(0, min(100, percent)))
+    def set_sla_compliance(self, sla_type: str, customer: str, app: str, service: str, endpoint: str, percent: float) -> None:
+        SYSTEM_SLA_COMPLIANCE_PERCENT.labels(sla_type=sla_type, customer=customer, app=app, service=service, endpoint=endpoint).set(max(0, min(100, percent)))
 
     def set_avg_response_time(self, seconds: float) -> None:
         SYSTEM_AVG_RESPONSE_TIME_SECONDS.set(max(0, seconds))
@@ -508,8 +518,8 @@ class MetricsCollector:
         MEMORY_USAGE_PERCENT.labels(service, customer, app, endpoint).set(memory_usage)
     
 
-    def set_qos_performance_score(self, customer: str, app: str, score: float) -> None:
-        QOS_PERFORMANCE_SCORE.labels(customer, app).set(max(0, min(100, score)))
+    def set_qos_performance_score(self, customer: str, app: str, service: str, endpoint: str, score: float) -> None:
+        QOS_PERFORMANCE_SCORE.labels(customer, app, service, endpoint).set(max(0, min(100, score)))
     
     def set_system_uptime(self, time_window: str, uptime_percent: float) -> None:
         """Set system uptime percentage for a given time window"""
@@ -520,53 +530,71 @@ class MetricsCollector:
         SYSTEM_AVAILABILITY_FAILURES.labels(failure_type, component).inc()
     
     def _calculate_sla_compliance(self) -> None:
-        """Calculate SLA compliance based on actual performance vs targets"""
+        """Calculate SLA compliance per service and endpoint based on actual performance vs targets"""
         # SLA Targets
         AVAILABILITY_TARGET = 100.0  # 100% availability target
         RESPONSE_TIME_TARGET = 1.0   # 1 second response time target
         THROUGHPUT_TARGET = 20.0     # 20 requests per minute target
         
-        # Get current metrics
-        total_requests = sum(self._request_success_count.values()) + sum(self._request_error_count.values())
-        total_success = sum(self._request_success_count.values())
+        # Group completed requests by customer, app, service, and endpoint
+        request_groups = {}
         
-        # Calculate availability compliance
-        if total_requests > 0:
-            current_availability = (total_success / total_requests) * 100
-            availability_compliance = min(100.0, (current_availability / AVAILABILITY_TARGET) * 100)
-        else:
-            availability_compliance = 100.0  # No requests yet, assume 100% compliance
-        
-        # Calculate response time compliance
-        # Get average response time from recent requests
-        if self._req:
-            current_time = time.time()
-            recent_requests = [
-                req for req in self._req.values()
-                if current_time - req["t0"] < 300  # Last 5 minutes
-            ]
+        for rid, req_data in self._completed_requests.items():
+            customer = req_data.get("customer", "unknown")
+            app = req_data.get("app", "unknown")
+            service = req_data.get("service", "unknown")
+            endpoint = req_data.get("endpoint", "unknown")
             
-            if recent_requests:
-                avg_response_time = sum(
-                    current_time - req["t0"] for req in recent_requests
-                ) / len(recent_requests)
-                response_time_compliance = max(0.0, min(100.0, (RESPONSE_TIME_TARGET / avg_response_time) * 100))
+            key = f"{customer}|{app}|{service}|{endpoint}"
+            if key not in request_groups:
+                request_groups[key] = {
+                    "success": 0, 
+                    "error": 0, 
+                    "total": 0,
+                    "response_times": [],
+                    "customer": customer,
+                    "app": app,
+                    "service": service,
+                    "endpoint": endpoint
+                }
+            
+            if req_data.get("success", True):
+                request_groups[key]["success"] += 1
             else:
-                response_time_compliance = 100.0  # No recent requests, assume 100% compliance
-        else:
-            response_time_compliance = 100.0  # No requests, assume 100% compliance
+                request_groups[key]["error"] += 1
+            request_groups[key]["total"] += 1
+            
+            # Use stored duration for response time
+            if "duration" in req_data:
+                request_groups[key]["response_times"].append(req_data["duration"])
         
-        # Calculate throughput compliance
-        if self._throughput_counter:
-            total_requests_per_minute = sum(self._throughput_counter.values()) * 6  # Convert 10-second intervals to per minute
-            throughput_compliance = min(100.0, (total_requests_per_minute / THROUGHPUT_TARGET) * 100)
-        else:
-            throughput_compliance = 100.0  # No throughput data, assume 100% compliance
-        
-        # Set SLA compliance metrics
-        self.set_sla_compliance("availability", availability_compliance)
-        self.set_sla_compliance("response_time", response_time_compliance)
-        self.set_sla_compliance("throughput", throughput_compliance)
+        # Calculate SLA compliance for each group
+        for key, stats in request_groups.items():
+            if stats["total"] > 0:
+                customer = stats["customer"]
+                app = stats["app"]
+                service = stats["service"]
+                endpoint = stats["endpoint"]
+                
+                # Calculate availability compliance
+                availability = (stats["success"] / stats["total"]) * 100
+                availability_compliance = min(100.0, (availability / AVAILABILITY_TARGET) * 100)
+                
+                # Calculate response time compliance
+                if stats["response_times"]:
+                    avg_response_time = sum(stats["response_times"]) / len(stats["response_times"])
+                    response_time_compliance = max(0.0, min(100.0, (RESPONSE_TIME_TARGET / avg_response_time) * 100))
+                else:
+                    response_time_compliance = 100.0
+                
+                # Calculate throughput compliance (requests per minute for this service/endpoint)
+                # This is a simplified calculation - in practice you might want to track this over time
+                throughput_compliance = min(100.0, (stats["total"] / THROUGHPUT_TARGET) * 100)
+                
+                # Set SLA compliance metrics for this service/endpoint combination
+                self.set_sla_compliance("availability", customer, app, service, endpoint, availability_compliance)
+                self.set_sla_compliance("response_time", customer, app, service, endpoint, response_time_compliance)
+                self.set_sla_compliance("throughput", customer, app, service, endpoint, throughput_compliance)
 
     def update_dynamic_metrics(self) -> None:
         """Update metrics that should be calculated from actual request data"""
@@ -628,25 +656,38 @@ class MetricsCollector:
         # Calculate SLA compliance based on targets
         self._calculate_sla_compliance()
         
-        # Calculate QoS performance scores based on actual performance
-        # Performance score = (availability * 0.4) + ((100 - error_rate) * 0.3) + (response_time_score * 0.3)
-        for customer in ["cust1", "cust2"]:
-            for app in ["voice-assistant (cust1)", "chat-support (cust2)", "nmt-app", "llm-app", "tts-app"]:
-                key = f"{customer}|{app}"
-                success_count = self._request_success_count.get(key, 0)
-                error_count = self._request_error_count.get(key, 0)
-                total_app_requests = success_count + error_count
+        # Calculate QoS performance scores based on actual requests
+        # Group completed requests by customer, app, service, and endpoint
+        request_groups = {}
+        
+        for rid, req_data in self._completed_requests.items():
+            customer = req_data.get("customer", "unknown")
+            app = req_data.get("app", "unknown")
+            service = req_data.get("service", "unknown")
+            endpoint = req_data.get("endpoint", "unknown")
+            
+            key = f"{customer}|{app}|{service}|{endpoint}"
+            if key not in request_groups:
+                request_groups[key] = {"success": 0, "error": 0, "total": 0}
+            
+            if req_data.get("success", True):
+                request_groups[key]["success"] += 1
+            else:
+                request_groups[key]["error"] += 1
+            request_groups[key]["total"] += 1
+        
+        # Calculate performance scores for each group
+        for key, stats in request_groups.items():
+            if stats["total"] > 0:
+                customer, app, service, endpoint = key.split("|")
                 
-                if total_app_requests > 0:
-                    app_availability = (success_count / total_app_requests) * 100
-                    app_error_rate = (error_count / total_app_requests) * 100
-                    # Simple performance score calculation
-                    performance_score = max(0, min(100, app_availability - (app_error_rate * 0.5)))
-                else:
-                    # No requests for this app yet, default to 100%
-                    performance_score = 100.0
+                availability = (stats["success"] / stats["total"]) * 100
+                error_rate = (stats["error"] / stats["total"]) * 100
                 
-                self.set_qos_performance_score(customer, app, performance_score)
+                # Calculate performance score: availability minus penalty for errors
+                performance_score = max(0, min(100, availability - (error_rate * 0.5)))
+                
+                self.set_qos_performance_score(customer, app, service, endpoint, performance_score)
 
     # ---------- handy context managers ----------
     @contextmanager
@@ -660,8 +701,8 @@ class MetricsCollector:
             raise
 
     @contextmanager
-    def request_timer(self, customer: str, app: str, endpoint: str):
-        rid = self.start_request(customer, app, endpoint)
+    def request_timer(self, customer: str, app: str, endpoint: str, service: str = "pipeline"):
+        rid = self.start_request(customer, app, endpoint, service)
         try:
             yield rid
             self.end_request(rid, 200)

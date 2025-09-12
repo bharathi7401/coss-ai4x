@@ -174,7 +174,7 @@ def run_pipeline(payload: PipelineInput):
     # Track success status of each service
     service_success = {"NMT": False, "LLM": False, "BackNMT": False, "TTS": False}
 
-    with metrics_collector.request_timer(customer, appname, "/pipeline") as rid:
+    with metrics_collector.request_timer(customer, appname, "/pipeline", "pipeline") as rid:
         try:
             # ---- Language Detection ----
             start = time.time()
@@ -606,7 +606,7 @@ def nmt_translate(payload: NMTInput):
     text = payload.text
     target_lang = payload.target_language
     
-    with metrics_collector.request_timer(customer, appname, "/nmt/translate") as rid:
+    with metrics_collector.request_timer(customer, appname, "/nmt/translate", "nmt") as rid:
         try:
             # Track service request
             metrics_collector.service_request("nmt", customer, appname)
@@ -661,7 +661,7 @@ def tts_speak(payload: TTSInput):
     language = payload.language
     gender = payload.gender
     
-    with metrics_collector.request_timer(customer, appname, "/tts/speak") as rid:
+    with metrics_collector.request_timer(customer, appname, "/tts/speak", "tts") as rid:
         try:
             # Track service request
             metrics_collector.service_request("tts", customer, appname)
@@ -711,7 +711,7 @@ def llm_generate(payload: LLMInput):
     appname = payload.customerAppName
     text = payload.text
     
-    with metrics_collector.request_timer(customer, appname, "/llm/generate") as rid:
+    with metrics_collector.request_timer(customer, appname, "/llm/generate", "llm") as rid:
         try:
             # Track service request
             metrics_collector.service_request("llm", customer, appname)
