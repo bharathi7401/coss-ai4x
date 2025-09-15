@@ -43,6 +43,30 @@ weather_service = WeatherService()
 TABLE_NAME = "ai4x_demo_requests_log_v6"
 
 # ----------------------------
+# Customers and Apps Catalog
+# ----------------------------
+# Ten representative Indian public/govt-style customers with domain and onboarding dates
+CUSTOMERS = [
+    {"name": "AgriSmart",        "domain": "agriculture",        "onboarding_date": "2023-01-15"},
+    {"name": "EduServe",         "domain": "education",          "onboarding_date": "2023-07-01"},
+    {"name": "SwasthyaCare",     "domain": "healthcare",         "onboarding_date": "2024-02-10"},
+    {"name": "BankSeva",         "domain": "banking",            "onboarding_date": "2024-09-05"},
+    {"name": "JanaSeva",         "domain": "citizen_services",   "onboarding_date": "2022-11-20"},
+    {"name": "UIDAI Connect",     "domain": "identity",           "onboarding_date": "2025-08-01"},
+    {"name": "RailConnect",      "domain": "transport",          "onboarding_date": "2024-12-01"},
+    {"name": "KrishiMitra",      "domain": "agriculture",        "onboarding_date": "2025-06-12"},
+    {"name": "ShikshaSetu",      "domain": "education",          "onboarding_date": "2022-05-18"},
+    {"name": "NagarPalika",      "domain": "municipal",          "onboarding_date": "2025-09-01"}
+]
+
+# Three common reference applications used by all customers
+APP_NAMES = [
+    "UIDAI Support",
+    "Banking Chat Support",
+    "Citizen Services Helpdesk"
+]
+
+# ----------------------------
 # Utility Functions
 # ----------------------------
 def detect_language_from_text(text: str) -> str:
@@ -91,16 +115,18 @@ def init_db():
 init_db()
 
 # Initialize system metrics
-metrics_collector.set_active_tenants(2)  # cust1 and cust2
+# Active tenants equals the number of configured customers
+metrics_collector.set_active_tenants(len(CUSTOMERS))
 metrics_collector.set_service_count("total", 3)  # NMT, LLM, TTS, ASR
 metrics_collector.set_service_count("nmt", 1)
 metrics_collector.set_service_count("llm", 1)
 metrics_collector.set_service_count("tts", 1)
 metrics_collector.set_service_count("asr", 1)
 
+# Define simple pipelines per customer (all use NMT+LLM; some add TTS)
 PIPELINES = {
-    "cust1": ["NMT", "LLM", "TTS"],
-    "cust2": ["NMT", "LLM"]
+    c["name"]: (["NMT", "LLM", "TTS"] if c["domain"] in ("citizen_services", "identity", "transport", "municipal") else ["NMT", "LLM"])  # speech added for public-facing domains
+    for c in CUSTOMERS
 }
 
 # ----------------------------
@@ -135,6 +161,16 @@ async def update_metrics_periodically():
 @app.on_event("startup")
 async def startup_event():
     """Start background tasks on app startup"""
+    # Register customer metadata (domain, onboarding date, timestamp) in Prometheus
+    from datetime import datetime
+    for c in CUSTOMERS:
+        dt = datetime.fromisoformat(c["onboarding_date"]).replace(tzinfo=timezone.utc)
+        metrics_collector.register_customer(
+            customer=c["name"],
+            domain=c["domain"],
+            onboarding_date=c["onboarding_date"],
+            onboard_unix_ts=dt.timestamp(),
+        )
     asyncio.create_task(update_metrics_periodically())
 
 # Add metrics endpoint
@@ -158,7 +194,8 @@ def run_pipeline(payload: PipelineInput):
     usage = {"NMT": None, "LLM": None, "TTS": None, "backNMT": None}
     customer = payload.customerName
     appname = payload.customerAppName
-    pipeline = PIPELINES.get(customer.lower()) or PIPELINES.get(customer)
+    # Normalize to our canonical customer names
+    pipeline = PIPELINES.get(customer) or PIPELINES.get(customer.strip())
     if not pipeline:
         raise HTTPException(status_code=400, detail=f"No pipeline defined for customer {customer}")
 

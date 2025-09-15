@@ -214,6 +214,24 @@ MEMORY_USAGE_PERCENT = Gauge(
 )
 
 
+# ----------------------------
+# Customer metadata metrics
+# ----------------------------
+CUSTOMER_METADATA = Gauge(
+    "ai4x_customer_metadata",
+    "Static mapping of customer to domain and onboarding date",
+    ["customer", "domain", "onboarding_date"],
+    registry=REGISTRY,
+)
+
+CUSTOMER_ONBOARD_TIMESTAMP = Gauge(
+    "ai4x_customer_onboard_timestamp",
+    "Customer onboarding time (unix seconds)",
+    ["customer"],
+    registry=REGISTRY,
+)
+
+
 NMT_CHARACTERS_TRANSLATED = Counter(
     "ai4x_nmt_characters_translated_total",
     "Total characters translated by NMT",
@@ -510,6 +528,11 @@ class MetricsCollector:
 
     def set_memory_usage_percent(self, percent: float, service: str = "system", customer: str = "system", app: str = "system", endpoint: str = "system") -> None:
         MEMORY_USAGE_PERCENT.labels(service, customer, app, endpoint).set(max(0, min(100, percent)))
+    
+    def register_customer(self, customer: str, domain: str, onboarding_date: str, onboard_unix_ts: float) -> None:
+        """Register static customer metadata for use in PromQL joins."""
+        CUSTOMER_METADATA.labels(customer, domain, onboarding_date).set(1)
+        CUSTOMER_ONBOARD_TIMESTAMP.labels(customer).set(onboard_unix_ts)
     
     def track_service_resource_usage(self, service: str, customer: str, app: str, endpoint: str) -> None:
         """Track actual CPU and memory usage for a specific service during request processing"""
