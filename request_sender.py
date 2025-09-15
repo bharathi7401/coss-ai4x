@@ -2,9 +2,9 @@
 """
 AI4X Pipeline Request Sender
 
-This script sends sample requests to the AI4X pipeline endpoint.
+This script sends sample requests to the AI4X endpoints.
 It loads sample data from sample_requests.json and sends requests
-to both cust1 and cust2 pipelines with configurable intervals.
+for multiple customers and reference apps with configurable intervals.
 """
 
 import json
@@ -50,7 +50,16 @@ class RequestSender:
         try:
             with open(self.sample_file, 'r', encoding='utf-8') as f:
                 data = json.load(f)
-            logger.info(f"Loaded {len(data.get('cust1_requests', []))} cust1 requests and {len(data.get('cust2_requests', []))} cust2 requests")
+            customers = data.get('customers', [])
+            pipeline_cnt = len(data.get('pipeline_requests', []))
+            indiv = data.get('individual_service_requests', {})
+            nmt_cnt = len(indiv.get('nmt_requests', []))
+            tts_cnt = len(indiv.get('tts_requests', []))
+            llm_cnt = len(indiv.get('llm_requests', []))
+            logger.info(
+                f"Loaded customers={len(customers)}, pipeline_requests={pipeline_cnt}, "
+                f"nmt={nmt_cnt}, tts={tts_cnt}, llm={llm_cnt}"
+            )
             return data
         except FileNotFoundError:
             logger.error(f"Sample data file {self.sample_file} not found!")
@@ -217,7 +226,7 @@ class RequestSender:
             interval_min: Minimum interval between requests (seconds)
             interval_max: Maximum interval between requests (seconds)
             max_requests: Maximum number of requests to send (None for infinite)
-            customer_filter: Filter by customer ('cust1' or 'cust2', None for both)
+            customer_filter: Comma-separated customer names (None for all)
             include_individual_services: Whether to include individual service requests
         """
         logger.info(f"Starting continuous request sending...")
@@ -229,6 +238,11 @@ class RequestSender:
         request_count = 0
         success_count = 0
         error_count = 0
+
+        # Prepare filter set
+        customers_set = None
+        if customer_filter:
+            customers_set = set(c.strip() for c in customer_filter.split(',') if c.strip())
         
         try:
             while True:
@@ -243,15 +257,11 @@ class RequestSender:
                 
                 if request_type == "pipeline":
                     # Select pipeline requests based on customer filter
-                    if customer_filter == 'cust1':
-                        available_requests = self.sample_data.get('cust1_requests', [])
-                    elif customer_filter == 'cust2':
-                        available_requests = self.sample_data.get('cust2_requests', [])
+                    all_pipeline = self.sample_data.get('pipeline_requests', [])
+                    if customers_set:
+                        available_requests = [r for r in all_pipeline if r.get('customerName') in customers_set]
                     else:
-                        # Mix both customers
-                        cust1_requests = self.sample_data.get('cust1_requests', [])
-                        cust2_requests = self.sample_data.get('cust2_requests', [])
-                        available_requests = cust1_requests + cust2_requests
+                        available_requests = all_pipeline
                     
                     if not available_requests:
                         logger.error("No pipeline sample requests available!")
@@ -265,19 +275,20 @@ class RequestSender:
                     
                 else:
                     # Select individual service requests
-                    service_requests = self.sample_data.get('individual_service_requests', {}).get(f'{request_type}_requests', [])
+                    all_service_requests = self.sample_data.get('individual_service_requests', {}).get(f'{request_type}_requests', [])
+                    if customers_set:
+                        service_requests = [r for r in all_service_requests if r.get('customerName') in customers_set]
+                    else:
+                        service_requests = all_service_requests
                     
                     if not service_requests:
                         logger.warning(f"No {request_type} sample requests available, falling back to pipeline")
                         # Fallback to pipeline requests
-                        if customer_filter == 'cust1':
-                            available_requests = self.sample_data.get('cust1_requests', [])
-                        elif customer_filter == 'cust2':
-                            available_requests = self.sample_data.get('cust2_requests', [])
+                        all_pipeline = self.sample_data.get('pipeline_requests', [])
+                        if customers_set:
+                            available_requests = [r for r in all_pipeline if r.get('customerName') in customers_set]
                         else:
-                            cust1_requests = self.sample_data.get('cust1_requests', [])
-                            cust2_requests = self.sample_data.get('cust2_requests', [])
-                            available_requests = cust1_requests + cust2_requests
+                            available_requests = all_pipeline
                         
                         if not available_requests:
                             logger.error("No sample requests available!")
@@ -324,23 +335,24 @@ class RequestSender:
         Send one request from each customer (or specified customer).
         
         Args:
-            customer: Customer to send request for ('cust1', 'cust2', or None for both)
+            customer: Customer name (or comma-separated names). None for all
             include_individual_services: Whether to include individual service requests
         """
         logger.info("Sending single batch of requests...")
         
         # Send pipeline requests
-        if customer == 'cust1' or customer is None:
-            cust1_requests = self.sample_data.get('cust1_requests', [])
-            if cust1_requests:
-                request_data = random.choice(cust1_requests)
-                self.send_request(request_data)
-        
-        if customer == 'cust2' or customer is None:
-            cust2_requests = self.sample_data.get('cust2_requests', [])
-            if cust2_requests:
-                request_data = random.choice(cust2_requests)
-                self.send_request(request_data)
+        all_pipeline = self.sample_data.get('pipeline_requests', [])
+        customers_set = set(c.strip() for c in customer.split(',')) if customer else None
+        if customers_set:
+            selected = [r for r in all_pipeline if r.get('customerName') in customers_set]
+            if selected:
+                self.send_request(random.choice(selected))
+        else:
+            # Send one per listed customer, if available
+            for cust in self.sample_data.get('customers', []):
+                selected = [r for r in all_pipeline if r.get('customerName') == cust]
+                if selected:
+                    self.send_request(random.choice(selected))
         
         # Send individual service requests if enabled
         if include_individual_services:
@@ -348,7 +360,11 @@ class RequestSender:
             
             # Send one of each individual service type
             for service_type in ['nmt', 'tts', 'llm']:
-                service_requests = individual_requests.get(f'{service_type}_requests', [])
+                all_service_requests = individual_requests.get(f'{service_type}_requests', [])
+                if customers_set:
+                    service_requests = [r for r in all_service_requests if r.get('customerName') in customers_set]
+                else:
+                    service_requests = all_service_requests
                 if service_requests:
                     request_data = random.choice(service_requests)
                     if service_type == 'nmt':
