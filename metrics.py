@@ -535,6 +535,7 @@ class MetricsCollector:
         AVAILABILITY_TARGET = 100.0  # 100% availability target
         RESPONSE_TIME_TARGET = 1.0   # 1 second response time target
         THROUGHPUT_TARGET = 20.0     # 20 requests per minute target
+        ERROR_RATE_TARGET_PERCENT = 0.5  # 0.5% maximum error rate target
         
         # Group completed requests by customer, app, service, and endpoint
         request_groups = {}
@@ -595,6 +596,16 @@ class MetricsCollector:
                 self.set_sla_compliance("availability", customer, app, service, endpoint, availability_compliance)
                 self.set_sla_compliance("response_time", customer, app, service, endpoint, response_time_compliance)
                 self.set_sla_compliance("throughput", customer, app, service, endpoint, throughput_compliance)
+
+                # Calculate error rate SLA compliance (lower is better)
+                error_rate_percent = (stats["error"] / stats["total"]) * 100 if stats["total"] > 0 else 0.0
+                if error_rate_percent <= 0:
+                    error_rate_compliance = 100.0
+                else:
+                    # Higher than target reduces compliance proportionally; cap at 100
+                    error_rate_compliance = max(0.0, min(100.0, (ERROR_RATE_TARGET_PERCENT / error_rate_percent) * 100))
+
+                self.set_sla_compliance("error_rate", customer, app, service, endpoint, error_rate_compliance)
 
     def update_dynamic_metrics(self) -> None:
         """Update metrics that should be calculated from actual request data"""
