@@ -186,6 +186,16 @@ SYSTEM_ERROR_RATE_PERCENT = Gauge(
     registry=REGISTRY,
 )
 
+# SLA target for error rate (percent)
+ERROR_RATE_SLA_TARGET_PERCENT = Gauge(
+    "ai4x_error_rate_sla_target_percent",
+    "SLA target for error rate (percent) - lower is better",
+    registry=REGISTRY,
+)
+
+# Initialize error rate SLA target to 0.5%
+ERROR_RATE_SLA_TARGET_PERCENT.set(0.5)
+
 # ----------------------------
 # Resource utilization metrics
 # ----------------------------
@@ -490,6 +500,10 @@ class MetricsCollector:
 
     def set_error_rate_percent(self, percent: float) -> None:
         SYSTEM_ERROR_RATE_PERCENT.set(max(0, min(100, percent)))
+
+    def set_error_rate_sla_target(self, percent: float) -> None:
+        """Set SLA target for error rate in percent."""
+        ERROR_RATE_SLA_TARGET_PERCENT.set(max(0, min(100, percent)))
 
     def set_cpu_usage_percent(self, percent: float, service: str = "system", customer: str = "system", app: str = "system", endpoint: str = "system") -> None:
         CPU_USAGE_PERCENT.labels(service, customer, app, endpoint).set(max(0, min(100, percent)))
