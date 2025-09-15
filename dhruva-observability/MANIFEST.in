@@ -1,0 +1,6 @@
+include README.md
+include requirements.txt
+include LICENSE
+recursive-include dhruva_observability/dashboards *.json
+recursive-include tests *.py
+include example_app.py

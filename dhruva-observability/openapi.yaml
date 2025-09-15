@@ -1,0 +1,665 @@
+openapi: 3.0.3
+info:
+  title: Dhruva Observability Plugin API
+  description: |
+    Enterprise observability plugin for Dhruva Platform providing comprehensive metrics,
+    monitoring, and business analytics capabilities.
+    
+    ## Features
+    - Multi-tenant request tracking
+    - Component-level performance monitoring
+    - Business metrics collection
+    - SLA compliance tracking
+    - System resource monitoring
+    - Pre-built Grafana dashboards
+    
+    ## Quick Start
+    1. Install: `pip install dhruva-observability`
+    2. Configure: Set environment variables
+    3. Integrate: Add 3 lines to your FastAPI app
+    4. Monitor: Access metrics at `/enterprise/metrics`
+    
+    ## Configuration
+    Set these environment variables:
+    - `DHRUVA_OBSERVABILITY_ENABLED=true`
+    - `DHRUVA_OBSERVABILITY_CUSTOMERS=customer1,customer2`
+    - `DHRUVA_OBSERVABILITY_APPS=app1,app2`
+  version: 1.0.0
+  contact:
+    name: AI4X Team
+    email: team@ai4x.com
+    url: https://github.com/ai4x/dhruva-observability
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+  termsOfService: https://github.com/ai4x/dhruva-observability/blob/main/LICENSE
+
+servers:
+  - url: http://localhost:8000
+    description: Local development server
+  - url: https://your-dhruva-instance.com
+    description: Production server
+
+tags:
+  - name: Enterprise Metrics
+    description: Prometheus-compatible metrics endpoints
+  - name: Health & Status
+    description: Health checks and status information
+  - name: Configuration
+    description: Plugin configuration management
+  - name: Business Analytics
+    description: Business-level metrics and insights
+
+paths:
+  /enterprise/metrics:
+    get:
+      tags:
+        - Enterprise Metrics
+      summary: Prometheus Metrics Endpoint
+      description: |
+        Returns Prometheus-compatible metrics in text format.
+        This endpoint is automatically scraped by Prometheus for monitoring.
+        
+        ## Metrics Categories
+        - **Request Metrics**: Total requests, duration, errors
+        - **Component Metrics**: NMT, TTS, ASR, LLM latency
+        - **Business Metrics**: Characters, tokens, minutes processed
+        - **System Metrics**: CPU, memory, GPU usage
+        - **SLA Metrics**: Availability, compliance, uptime
+      operationId: getMetrics
+      responses:
+        '200':
+          description: Prometheus metrics in text format
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: |
+                  # HELP dhruva_enterprise_requests_total Total number of requests
+                  # TYPE dhruva_enterprise_requests_total counter
+                  dhruva_enterprise_requests_total{customer="customer1",app="app1",endpoint="/translate",status="success"} 150
+                  
+                  # HELP dhruva_enterprise_request_duration_seconds Request duration in seconds
+                  # TYPE dhruva_enterprise_request_duration_seconds histogram
+                  dhruva_enterprise_request_duration_seconds_bucket{customer="customer1",app="app1",endpoint="/translate",le="0.5"} 120
+                  
+                  # HELP dhruva_enterprise_nmt_characters_translated_total Total characters translated by NMT
+                  # TYPE dhruva_enterprise_nmt_characters_translated_total counter
+                  dhruva_enterprise_nmt_characters_translated_total{customer="customer1",app="app1",source_lang="en",target_lang="hi"} 50000
+        '503':
+          description: Service unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /enterprise/health:
+    get:
+      tags:
+        - Health & Status
+      summary: Health Check Endpoint
+      description: |
+        Returns the health status of the enterprise plugin.
+        Useful for load balancers and monitoring systems.
+      operationId: getHealth
+      responses:
+        '200':
+          description: Plugin is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthStatus'
+              example:
+                status: "healthy"
+                plugin: "dhruva-enterprise"
+                version: "1.0.0"
+                enabled: true
+                customers: ["customer1", "customer2"]
+                apps: ["app1", "app2"]
+        '503':
+          description: Plugin is unhealthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthStatus'
+
+  /enterprise/config:
+    get:
+      tags:
+        - Configuration
+      summary: Get Plugin Configuration
+      description: |
+        Returns the current plugin configuration.
+        Useful for debugging and configuration verification.
+      operationId: getConfig
+      responses:
+        '200':
+          description: Current plugin configuration
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PluginConfig'
+              example:
+                enabled: true
+                debug: false
+                customers: ["customer1", "customer2"]
+                apps: ["app1", "app2"]
+                default_customer: "default"
+                default_app: "default"
+                metrics_path: "/enterprise/metrics"
+                health_path: "/enterprise/health"
+                collect_system_metrics: true
+                collect_gpu_metrics: true
+                collect_db_metrics: true
+                availability_target: 100.0
+                response_time_target: 1.0
+                throughput_target: 20.0
+        '403':
+          description: Access forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /enterprise/status:
+    get:
+      tags:
+        - Health & Status
+      summary: Get Plugin Status
+      description: |
+        Returns detailed status information about the plugin.
+        Includes initialization status and runtime information.
+      operationId: getStatus
+      responses:
+        '200':
+          description: Plugin status information
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PluginStatus'
+              example:
+                initialized: true
+                enabled: true
+                debug: false
+                customers: ["customer1", "customer2"]
+                apps: ["app1", "app2"]
+                metrics_path: "/enterprise/metrics"
+                health_path: "/enterprise/health"
+
+  /enterprise/analytics/customers:
+    get:
+      tags:
+        - Business Analytics
+      summary: Get Customer Analytics
+      description: |
+        Returns analytics data for all customers.
+        Provides business insights and usage patterns.
+      operationId: getCustomerAnalytics
+      parameters:
+        - name: time_range
+          in: query
+          description: Time range for analytics (1h, 24h, 7d, 30d)
+          required: false
+          schema:
+            type: string
+            enum: [1h, 24h, 7d, 30d]
+            default: 24h
+        - name: metric_type
+          in: query
+          description: Type of metrics to include
+          required: false
+          schema:
+            type: string
+            enum: [requests, latency, errors, usage, all]
+            default: all
+      responses:
+        '200':
+          description: Customer analytics data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerAnalytics'
+              example:
+                time_range: "24h"
+                customers:
+                  - customer_id: "customer1"
+                    total_requests: 1500
+                    success_rate: 99.5
+                    avg_response_time: 0.8
+                    total_characters: 50000
+                    total_tokens: 75000
+                    sla_compliance: 98.5
+                  - customer_id: "customer2"
+                    total_requests: 800
+                    success_rate: 99.2
+                    avg_response_time: 1.2
+                    total_characters: 30000
+                    total_tokens: 45000
+                    sla_compliance: 97.8
+
+  /enterprise/analytics/services:
+    get:
+      tags:
+        - Business Analytics
+      summary: Get Service Analytics
+      description: |
+        Returns analytics data for all services (NMT, TTS, ASR, LLM).
+        Provides service-level performance insights.
+      operationId: getServiceAnalytics
+      parameters:
+        - name: time_range
+          in: query
+          description: Time range for analytics
+          required: false
+          schema:
+            type: string
+            enum: [1h, 24h, 7d, 30d]
+            default: 24h
+        - name: service_type
+          in: query
+          description: Specific service type to analyze
+          required: false
+          schema:
+            type: string
+            enum: [nmt, tts, asr, llm, all]
+            default: all
+      responses:
+        '200':
+          description: Service analytics data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceAnalytics'
+              example:
+                time_range: "24h"
+                services:
+                  - service_type: "nmt"
+                    total_requests: 800
+                    avg_latency: 0.5
+                    success_rate: 99.8
+                    total_characters: 40000
+                    error_rate: 0.2
+                  - service_type: "tts"
+                    total_requests: 600
+                    avg_latency: 1.2
+                    success_rate: 99.5
+                    total_characters: 30000
+                    error_rate: 0.5
+
+  /enterprise/sla/compliance:
+    get:
+      tags:
+        - Business Analytics
+      summary: Get SLA Compliance Report
+      description: |
+        Returns SLA compliance metrics for all customers and services.
+        Helps track service level agreements and performance targets.
+      operationId: getSLACompliance
+      parameters:
+        - name: time_range
+          in: query
+          description: Time range for SLA analysis
+          required: false
+          schema:
+            type: string
+            enum: [1h, 24h, 7d, 30d]
+            default: 24h
+        - name: sla_type
+          in: query
+          description: Type of SLA to analyze
+          required: false
+          schema:
+            type: string
+            enum: [availability, response_time, throughput, all]
+            default: all
+      responses:
+        '200':
+          description: SLA compliance report
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SLACompliance'
+              example:
+                time_range: "24h"
+                overall_compliance: 98.5
+                sla_targets:
+                  availability_target: 100.0
+                  response_time_target: 1.0
+                  throughput_target: 20.0
+                customer_compliance:
+                  - customer_id: "customer1"
+                    availability: 99.5
+                    response_time: 98.0
+                    throughput: 97.5
+                    overall: 98.3
+                  - customer_id: "customer2"
+                    availability: 99.2
+                    response_time: 96.5
+                    throughput: 98.0
+                    overall: 97.9
+
+components:
+  schemas:
+    HealthStatus:
+      type: object
+      required:
+        - status
+        - plugin
+        - version
+        - enabled
+      properties:
+        status:
+          type: string
+          enum: [healthy, unhealthy]
+          description: Overall health status
+        plugin:
+          type: string
+          description: Plugin name
+          example: "dhruva-enterprise"
+        version:
+          type: string
+          description: Plugin version
+          example: "1.0.0"
+        enabled:
+          type: boolean
+          description: Whether plugin is enabled
+        customers:
+          type: array
+          items:
+            type: string
+          description: Configured customers
+        apps:
+          type: array
+          items:
+            type: string
+          description: Configured applications
+
+    PluginConfig:
+      type: object
+      required:
+        - enabled
+        - customers
+        - apps
+      properties:
+        enabled:
+          type: boolean
+          description: Plugin enabled status
+        debug:
+          type: boolean
+          description: Debug mode enabled
+        customers:
+          type: array
+          items:
+            type: string
+          description: Allowed customers
+        apps:
+          type: array
+          items:
+            type: string
+          description: Allowed applications
+        default_customer:
+          type: string
+          description: Default customer
+        default_app:
+          type: string
+          description: Default application
+        metrics_path:
+          type: string
+          description: Metrics endpoint path
+        health_path:
+          type: string
+          description: Health endpoint path
+        collect_system_metrics:
+          type: boolean
+          description: System metrics collection enabled
+        collect_gpu_metrics:
+          type: boolean
+          description: GPU metrics collection enabled
+        collect_db_metrics:
+          type: boolean
+          description: Database metrics collection enabled
+        availability_target:
+          type: number
+          format: float
+          description: Availability target percentage
+        response_time_target:
+          type: number
+          format: float
+          description: Response time target in seconds
+        throughput_target:
+          type: number
+          format: float
+          description: Throughput target in requests per minute
+
+    PluginStatus:
+      type: object
+      required:
+        - initialized
+        - enabled
+      properties:
+        initialized:
+          type: boolean
+          description: Plugin initialization status
+        enabled:
+          type: boolean
+          description: Plugin enabled status
+        debug:
+          type: boolean
+          description: Debug mode status
+        customers:
+          type: array
+          items:
+            type: string
+          description: Configured customers
+        apps:
+          type: array
+          items:
+            type: string
+          description: Configured applications
+        metrics_path:
+          type: string
+          description: Metrics endpoint path
+        health_path:
+          type: string
+          description: Health endpoint path
+
+    CustomerAnalytics:
+      type: object
+      required:
+        - time_range
+        - customers
+      properties:
+        time_range:
+          type: string
+          description: Analytics time range
+        customers:
+          type: array
+          items:
+            $ref: '#/components/schemas/CustomerMetrics'
+          description: Customer metrics data
+
+    CustomerMetrics:
+      type: object
+      required:
+        - customer_id
+        - total_requests
+        - success_rate
+      properties:
+        customer_id:
+          type: string
+          description: Customer identifier
+        total_requests:
+          type: integer
+          description: Total requests in time range
+        success_rate:
+          type: number
+          format: float
+          description: Success rate percentage
+        avg_response_time:
+          type: number
+          format: float
+          description: Average response time in seconds
+        total_characters:
+          type: integer
+          description: Total characters processed
+        total_tokens:
+          type: integer
+          description: Total tokens processed
+        sla_compliance:
+          type: number
+          format: float
+          description: SLA compliance percentage
+
+    ServiceAnalytics:
+      type: object
+      required:
+        - time_range
+        - services
+      properties:
+        time_range:
+          type: string
+          description: Analytics time range
+        services:
+          type: array
+          items:
+            $ref: '#/components/schemas/ServiceMetrics'
+          description: Service metrics data
+
+    ServiceMetrics:
+      type: object
+      required:
+        - service_type
+        - total_requests
+        - avg_latency
+        - success_rate
+      properties:
+        service_type:
+          type: string
+          enum: [nmt, tts, asr, llm]
+          description: Service type
+        total_requests:
+          type: integer
+          description: Total requests in time range
+        avg_latency:
+          type: number
+          format: float
+          description: Average latency in seconds
+        success_rate:
+          type: number
+          format: float
+          description: Success rate percentage
+        total_characters:
+          type: integer
+          description: Total characters processed
+        error_rate:
+          type: number
+          format: float
+          description: Error rate percentage
+
+    SLACompliance:
+      type: object
+      required:
+        - time_range
+        - overall_compliance
+        - sla_targets
+      properties:
+        time_range:
+          type: string
+          description: SLA analysis time range
+        overall_compliance:
+          type: number
+          format: float
+          description: Overall SLA compliance percentage
+        sla_targets:
+          $ref: '#/components/schemas/SLATargets'
+        customer_compliance:
+          type: array
+          items:
+            $ref: '#/components/schemas/CustomerSLACompliance'
+          description: Customer-specific SLA compliance
+
+    SLATargets:
+      type: object
+      required:
+        - availability_target
+        - response_time_target
+        - throughput_target
+      properties:
+        availability_target:
+          type: number
+          format: float
+          description: Availability target percentage
+        response_time_target:
+          type: number
+          format: float
+          description: Response time target in seconds
+        throughput_target:
+          type: number
+          format: float
+          description: Throughput target in requests per minute
+
+    CustomerSLACompliance:
+      type: object
+      required:
+        - customer_id
+        - overall
+      properties:
+        customer_id:
+          type: string
+          description: Customer identifier
+        availability:
+          type: number
+          format: float
+          description: Availability compliance percentage
+        response_time:
+          type: number
+          format: float
+          description: Response time compliance percentage
+        throughput:
+          type: number
+          format: float
+          description: Throughput compliance percentage
+        overall:
+          type: number
+          format: float
+          description: Overall compliance percentage
+
+    Error:
+      type: object
+      required:
+        - error
+        - message
+      properties:
+        error:
+          type: string
+          description: Error type
+        message:
+          type: string
+          description: Error message
+        details:
+          type: string
+          description: Additional error details
+        timestamp:
+          type: string
+          format: date-time
+          description: Error timestamp
+
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: API key for authentication
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token for authentication
+
+security:
+  - ApiKeyAuth: []
+  - BearerAuth: []
+
+externalDocs:
+  description: Dhruva Enterprise Plugin Documentation
+  url: https://github.com/ai4x/dhruva-enterprise-plugin
