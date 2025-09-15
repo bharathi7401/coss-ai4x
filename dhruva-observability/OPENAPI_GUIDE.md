@@ -1,14 +1,8 @@
-# Dhruva Enterprise Plugin: OpenAPI Specification
+# Dhruva Observability Plugin: Python Integration Guide
 
 ## Overview
 
-The Dhruva Enterprise Plugin provides a comprehensive OpenAPI 3.0 specification that documents all available endpoints, request/response schemas, and integration details. This specification enables:
-
-- **API Documentation**: Automatic generation of interactive documentation
-- **Client SDK Generation**: Generate client libraries in multiple languages
-- **API Testing**: Import into tools like Postman, Insomnia, or curl
-- **Integration**: Easy integration with external systems
-- **Validation**: Request/response validation and type checking
+The Dhruva Observability Plugin provides a comprehensive OpenAPI 3.0 specification that documents all available endpoints, request/response schemas, and integration details. This guide focuses on Python integration and usage.
 
 ## Available Formats
 
@@ -16,11 +10,6 @@ The Dhruva Enterprise Plugin provides a comprehensive OpenAPI 3.0 specification 
 - **File**: `openapi.yaml`
 - **Use Case**: Human-readable, easy to edit
 - **Tools**: Swagger Editor, OpenAPI Generator
-
-### 2. JSON Format
-- **File**: `openapi.json`
-- **Use Case**: Programmatic access, API tools
-- **Tools**: Postman, Insomnia, curl
 
 ## API Endpoints
 
@@ -66,104 +55,10 @@ The Dhruva Enterprise Plugin provides a comprehensive OpenAPI 3.0 specification 
 - **Response**: SLA compliance metrics
 - **Use Case**: SLA monitoring and reporting
 
-## Usage Examples
+## Python Usage Examples
 
-### 1. View Interactive Documentation
+### 1. Basic API Integration
 
-#### Using Swagger UI
-```bash
-# Install Swagger UI
-npm install -g swagger-ui-serve
-
-# Serve the OpenAPI spec
-swagger-ui-serve openapi.yaml
-```
-
-#### Using Redoc
-```bash
-# Install Redoc
-npm install -g redoc-cli
-
-# Generate documentation
-redoc-cli serve openapi.yaml
-```
-
-### 2. Generate Client SDKs
-
-#### Python Client
-```bash
-# Install OpenAPI Generator
-npm install -g @openapitools/openapi-generator-cli
-
-# Generate Python client
-openapi-generator-cli generate \
-  -i openapi.yaml \
-  -g python \
-  -o ./python-client
-```
-
-#### JavaScript Client
-```bash
-# Generate JavaScript client
-openapi-generator-cli generate \
-  -i openapi.yaml \
-  -g javascript \
-  -o ./javascript-client
-```
-
-#### Go Client
-```bash
-# Generate Go client
-openapi-generator-cli generate \
-  -i openapi.yaml \
-  -g go \
-  -o ./go-client
-```
-
-### 3. Import into API Testing Tools
-
-#### Postman
-1. Open Postman
-2. Click "Import"
-3. Select `openapi.yaml` or `openapi.json`
-4. All endpoints will be imported with examples
-
-#### Insomnia
-1. Open Insomnia
-2. Click "Create" → "Import from URL"
-3. Provide path to `openapi.yaml`
-4. All endpoints will be imported
-
-#### curl Examples
-```bash
-# Health check
-curl -X GET "http://localhost:8000/enterprise/health" \
-  -H "accept: application/json"
-
-# Get metrics
-curl -X GET "http://localhost:8000/enterprise/metrics" \
-  -H "accept: text/plain"
-
-# Get configuration
-curl -X GET "http://localhost:8000/enterprise/config" \
-  -H "accept: application/json"
-
-# Get customer analytics
-curl -X GET "http://localhost:8000/enterprise/analytics/customers?time_range=24h" \
-  -H "accept: application/json"
-
-# Get service analytics
-curl -X GET "http://localhost:8000/enterprise/analytics/services?service_type=nmt" \
-  -H "accept: application/json"
-
-# Get SLA compliance
-curl -X GET "http://localhost:8000/enterprise/sla/compliance?sla_type=availability" \
-  -H "accept: application/json"
-```
-
-### 4. Programmatic Integration
-
-#### Python Example
 ```python
 import requests
 import json
@@ -195,54 +90,188 @@ sla_data = response.json()
 print(f"Overall SLA Compliance: {sla_data['overall_compliance']}%")
 ```
 
-#### JavaScript Example
-```javascript
-const axios = require('axios');
+### 2. Using the Plugin Directly
 
-const baseUrl = 'http://localhost:8000';
+```python
+import os
+from fastapi import FastAPI
+from dhruva_observability import ObservabilityPlugin
 
-// Health check
-async function checkHealth() {
-    try {
-        const response = await axios.get(`${baseUrl}/enterprise/health`);
-        console.log('Plugin Status:', response.data.status);
-    } catch (error) {
-        console.error('Health check failed:', error.message);
+# Set environment variables
+os.environ["DHRUVA_OBSERVABILITY_ENABLED"] = "true"
+os.environ["DHRUVA_OBSERVABILITY_CUSTOMERS"] = "customer1,customer2"
+os.environ["DHRUVA_OBSERVABILITY_APPS"] = "app1,app2"
+
+# Create FastAPI app
+app = FastAPI(title="My Dhruva App")
+
+# Initialize and register the observability plugin
+plugin = ObservabilityPlugin()
+plugin.register_plugin(app)
+
+# Your existing endpoints work unchanged
+@app.post("/nmt/translate")
+async def translate():
+    return {"translated": "Hello World"}
+
+@app.post("/tts/synthesize")
+async def synthesize():
+    return {"audio": "base64_encoded_audio"}
+```
+
+### 3. Custom Metrics Collection
+
+```python
+from dhruva_observability import MetricsCollector
+
+# Initialize metrics collector
+metrics = MetricsCollector()
+
+# Track custom business metrics
+def track_custom_metric(value, customer, app):
+    metrics.update_dynamic_metric("custom_metric", value, customer, app)
+
+# Track service resource usage
+def track_resource_usage(service, customer, app, endpoint):
+    metrics.track_service_resource_usage(service, customer, app, endpoint)
+
+# Example usage
+track_custom_metric(100, "customer1", "app1")
+track_resource_usage("nmt", "customer1", "app1", "/translate")
+```
+
+### 4. Monitoring Dashboard
+
+```python
+import requests
+import time
+from datetime import datetime
+
+def update_dashboard():
+    base_url = "http://localhost:8000"
+    
+    # Get health status
+    health = requests.get(f"{base_url}/enterprise/health").json()
+    
+    # Get customer analytics
+    analytics = requests.get(
+        f"{base_url}/enterprise/analytics/customers",
+        params={"time_range": "1h"}
+    ).json()
+    
+    # Get SLA compliance
+    sla = requests.get(
+        f"{base_url}/enterprise/sla/compliance",
+        params={"time_range": "1h"}
+    ).json()
+    
+    # Update dashboard
+    dashboard_data = {
+        "timestamp": datetime.now().isoformat(),
+        "health": health["status"],
+        "total_requests": sum(c["total_requests"] for c in analytics["customers"]),
+        "sla_compliance": sla["overall_compliance"]
     }
-}
+    
+    return dashboard_data
 
-// Get customer analytics
-async function getCustomerAnalytics() {
-    try {
-        const response = await axios.get(`${baseUrl}/enterprise/analytics/customers`, {
-            params: { time_range: '24h', metric_type: 'all' }
-        });
-        
-        response.data.customers.forEach(customer => {
-            console.log(`Customer ${customer.customer_id}: ${customer.total_requests} requests`);
-        });
-    } catch (error) {
-        console.error('Analytics request failed:', error.message);
-    }
-}
+# Run every minute
+while True:
+    data = update_dashboard()
+    print(f"Dashboard updated: {data}")
+    time.sleep(60)
+```
 
-// Get SLA compliance
-async function getSLACompliance() {
-    try {
-        const response = await axios.get(`${baseUrl}/enterprise/sla/compliance`, {
-            params: { time_range: '24h', sla_type: 'all' }
-        });
-        
-        console.log(`Overall SLA Compliance: ${response.data.overall_compliance}%`);
-    } catch (error) {
-        console.error('SLA compliance request failed:', error.message);
-    }
-}
+### 5. Alerting System
 
-// Run examples
-checkHealth();
-getCustomerAnalytics();
-getSLACompliance();
+```python
+import requests
+import smtplib
+from email.mime.text import MIMEText
+
+def check_alerts():
+    base_url = "http://localhost:8000"
+    
+    # Check health
+    health = requests.get(f"{base_url}/enterprise/health").json()
+    if health["status"] != "healthy":
+        send_alert("Plugin Health Alert", f"Plugin status: {health['status']}")
+    
+    # Check SLA compliance
+    sla = requests.get(
+        f"{base_url}/enterprise/sla/compliance",
+        params={"time_range": "1h"}
+    ).json()
+    
+    if sla["overall_compliance"] < 95:
+        send_alert("SLA Compliance Alert", 
+                  f"SLA compliance: {sla['overall_compliance']}%")
+    
+    # Check individual customers
+    analytics = requests.get(
+        f"{base_url}/enterprise/analytics/customers",
+        params={"time_range": "1h"}
+    ).json()
+    
+    for customer in analytics["customers"]:
+        if customer["success_rate"] < 95:
+            send_alert("Customer Success Rate Alert",
+                      f"Customer {customer['customer_id']}: {customer['success_rate']}%")
+
+def send_alert(subject, message):
+    # Implementation for sending alerts
+    print(f"ALERT: {subject} - {message}")
+
+# Run every 5 minutes
+import time
+while True:
+    check_alerts()
+    time.sleep(300)
+```
+
+### 6. Prometheus Integration
+
+```python
+import requests
+from prometheus_client import start_http_server, Gauge, Counter
+import time
+
+# Create Prometheus metrics
+dhruva_health = Gauge('dhruva_plugin_health', 'Plugin health status')
+dhruva_requests = Counter('dhruva_total_requests', 'Total requests processed')
+dhruva_sla_compliance = Gauge('dhruva_sla_compliance_percent', 'SLA compliance percentage')
+
+def collect_metrics():
+    base_url = "http://localhost:8000"
+    
+    # Get health status
+    health = requests.get(f"{base_url}/enterprise/health").json()
+    dhruva_health.set(1 if health["status"] == "healthy" else 0)
+    
+    # Get customer analytics
+    analytics = requests.get(
+        f"{base_url}/enterprise/analytics/customers",
+        params={"time_range": "1h"}
+    ).json()
+    
+    total_requests = sum(c["total_requests"] for c in analytics["customers"])
+    dhruva_requests.inc(total_requests)
+    
+    # Get SLA compliance
+    sla = requests.get(
+        f"{base_url}/enterprise/sla/compliance",
+        params={"time_range": "1h"}
+    ).json()
+    
+    dhruva_sla_compliance.set(sla["overall_compliance"])
+
+# Start Prometheus metrics server
+start_http_server(8001)
+
+# Collect metrics every 30 seconds
+while True:
+    collect_metrics()
+    time.sleep(30)
 ```
 
 ## Schema Reference
@@ -253,7 +282,7 @@ getSLACompliance();
 ```json
 {
   "status": "healthy",
-  "plugin": "dhruva-enterprise",
+  "plugin": "dhruva-observability",
   "version": "1.0.0",
   "enabled": true,
   "customers": ["customer1", "customer2"],
@@ -333,17 +362,15 @@ getSLACompliance();
 The API supports two authentication methods:
 
 ### 1. API Key Authentication
-```bash
-curl -X GET "http://localhost:8000/enterprise/config" \
-  -H "X-API-Key: your-api-key" \
-  -H "accept: application/json"
+```python
+headers = {"X-API-Key": "your-api-key"}
+response = requests.get("http://localhost:8000/enterprise/config", headers=headers)
 ```
 
 ### 2. Bearer Token Authentication
-```bash
-curl -X GET "http://localhost:8000/enterprise/config" \
-  -H "Authorization: Bearer your-jwt-token" \
-  -H "accept: application/json"
+```python
+headers = {"Authorization": "Bearer your-jwt-token"}
+response = requests.get("http://localhost:8000/enterprise/config", headers=headers)
 ```
 
 ## Error Handling
@@ -389,95 +416,4 @@ The API implements rate limiting to prevent abuse:
 - Implement proper authentication
 - Validate all input parameters
 
-## Integration Examples
-
-### 1. Monitoring Dashboard
-```python
-# Create a monitoring dashboard
-import requests
-import time
-from datetime import datetime
-
-def update_dashboard():
-    base_url = "http://localhost:8000"
-    
-    # Get health status
-    health = requests.get(f"{base_url}/enterprise/health").json()
-    
-    # Get customer analytics
-    analytics = requests.get(
-        f"{base_url}/enterprise/analytics/customers",
-        params={"time_range": "1h"}
-    ).json()
-    
-    # Get SLA compliance
-    sla = requests.get(
-        f"{base_url}/enterprise/sla/compliance",
-        params={"time_range": "1h"}
-    ).json()
-    
-    # Update dashboard
-    dashboard_data = {
-        "timestamp": datetime.now().isoformat(),
-        "health": health["status"],
-        "total_requests": sum(c["total_requests"] for c in analytics["customers"]),
-        "sla_compliance": sla["overall_compliance"]
-    }
-    
-    return dashboard_data
-
-# Run every minute
-while True:
-    data = update_dashboard()
-    print(f"Dashboard updated: {data}")
-    time.sleep(60)
-```
-
-### 2. Alerting System
-```python
-# Create an alerting system
-import requests
-import smtplib
-from email.mime.text import MIMEText
-
-def check_alerts():
-    base_url = "http://localhost:8000"
-    
-    # Check health
-    health = requests.get(f"{base_url}/enterprise/health").json()
-    if health["status"] != "healthy":
-        send_alert("Plugin Health Alert", f"Plugin status: {health['status']}")
-    
-    # Check SLA compliance
-    sla = requests.get(
-        f"{base_url}/enterprise/sla/compliance",
-        params={"time_range": "1h"}
-    ).json()
-    
-    if sla["overall_compliance"] < 95:
-        send_alert("SLA Compliance Alert", 
-                  f"SLA compliance: {sla['overall_compliance']}%")
-    
-    # Check individual customers
-    analytics = requests.get(
-        f"{base_url}/enterprise/analytics/customers",
-        params={"time_range": "1h"}
-    ).json()
-    
-    for customer in analytics["customers"]:
-        if customer["success_rate"] < 95:
-            send_alert("Customer Success Rate Alert",
-                      f"Customer {customer['customer_id']}: {customer['success_rate']}%")
-
-def send_alert(subject, message):
-    # Implementation for sending alerts
-    print(f"ALERT: {subject} - {message}")
-
-# Run every 5 minutes
-import time
-while True:
-    check_alerts()
-    time.sleep(300)
-```
-
-This OpenAPI specification provides a complete reference for integrating with the Dhruva Enterprise Plugin, enabling developers to build custom monitoring solutions, dashboards, and alerting systems.
+This Python-focused guide provides everything you need to integrate with the Dhruva Observability Plugin using Python.

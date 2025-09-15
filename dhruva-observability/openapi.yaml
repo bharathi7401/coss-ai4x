@@ -111,7 +111,7 @@ paths:
                 $ref: '#/components/schemas/HealthStatus'
               example:
                 status: "healthy"
-                plugin: "dhruva-enterprise"
+                plugin: "dhruva-observability"
                 version: "1.0.0"
                 enabled: true
                 customers: ["customer1", "customer2"]
@@ -355,7 +355,7 @@ components:
         plugin:
           type: string
           description: Plugin name
-          example: "dhruva-enterprise"
+          example: "dhruva-observability"
         version:
           type: string
           description: Plugin version
@@ -661,5 +661,5 @@ security:
   - BearerAuth: []
 
 externalDocs:
-  description: Dhruva Enterprise Plugin Documentation
-  url: https://github.com/ai4x/dhruva-enterprise-plugin
+  description: Dhruva Observability Plugin Documentation
+  url: https://github.com/ai4x/dhruva-observability
