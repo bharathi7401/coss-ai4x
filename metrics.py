@@ -50,7 +50,7 @@ COMPONENT_LATENCY = Histogram(
 ERROR_COUNT = Counter(
     "ai4x_errors_total",
     "Total number of errors",
-    ["customer", "app", "error_type", "component"],
+    ["customer", "app", "endpoint", "error_type"],
     registry=REGISTRY,
 )
 
@@ -430,7 +430,7 @@ class MetricsCollector:
             self._request_success_count[key] = self._request_success_count.get(key, 0) + 1
         else:
             self._request_error_count[key] = self._request_error_count.get(key, 0) + 1
-            ERROR_COUNT.labels(customer, app, status, "api").inc()
+            ERROR_COUNT.labels(customer, app, ep, status).inc()
             
             # Record system availability failure
             if status == "server_error":
@@ -470,7 +470,7 @@ class MetricsCollector:
         dur = time.time() - t0
         COMPONENT_LATENCY.labels(component, d["customer"], d["app"]).observe(dur)
         if not success:
-            ERROR_COUNT.labels(d["customer"], d["app"], "processing_error", component).inc()
+            ERROR_COUNT.labels(d["customer"], d["app"], d["endpoint"], "processing_error").inc()
             # Record service availability failure
             self.record_availability_failure("service_error", component.lower())
 
