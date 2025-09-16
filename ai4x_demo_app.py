@@ -69,6 +69,13 @@ APP_NAMES = [
 # ----------------------------
 # Utility Functions
 # ----------------------------
+def get_customer_domain(customer_name: str) -> str:
+    """Get domain for a customer from the CUSTOMERS list."""
+    for customer in CUSTOMERS:
+        if customer["name"] == customer_name:
+            return customer["domain"]
+    return "unknown"
+
 def detect_language_from_text(text: str) -> str:
     text_lower = text.lower().strip()
     if any('\u0900' <= char <= '\u097F' for char in text): return "hi"
@@ -211,7 +218,8 @@ def run_pipeline(payload: PipelineInput):
     # Track success status of each service
     service_success = {"NMT": False, "LLM": False, "BackNMT": False, "TTS": False}
 
-    with metrics_collector.request_timer(customer, appname, "/pipeline", "pipeline") as rid:
+    domain = get_customer_domain(customer)
+    with metrics_collector.request_timer(customer, appname, "/pipeline", domain, "pipeline") as rid:
         try:
             # ---- Language Detection ----
             start = time.time()
@@ -643,7 +651,8 @@ def nmt_translate(payload: NMTInput):
     text = payload.text
     target_lang = payload.target_language
     
-    with metrics_collector.request_timer(customer, appname, "/nmt/translate", "nmt") as rid:
+    domain = get_customer_domain(customer)
+    with metrics_collector.request_timer(customer, appname, "/nmt/translate", domain, "nmt") as rid:
         try:
             # Track service request
             metrics_collector.service_request("nmt", customer, appname)
@@ -698,7 +707,8 @@ def tts_speak(payload: TTSInput):
     language = payload.language
     gender = payload.gender
     
-    with metrics_collector.request_timer(customer, appname, "/tts/speak", "tts") as rid:
+    domain = get_customer_domain(customer)
+    with metrics_collector.request_timer(customer, appname, "/tts/speak", domain, "tts") as rid:
         try:
             # Track service request
             metrics_collector.service_request("tts", customer, appname)
@@ -748,7 +758,8 @@ def llm_generate(payload: LLMInput):
     appname = payload.customerAppName
     text = payload.text
     
-    with metrics_collector.request_timer(customer, appname, "/llm/generate", "llm") as rid:
+    domain = get_customer_domain(customer)
+    with metrics_collector.request_timer(customer, appname, "/llm/generate", domain, "llm") as rid:
         try:
             # Track service request
             metrics_collector.service_request("llm", customer, appname)

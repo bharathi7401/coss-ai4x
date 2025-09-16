@@ -21,14 +21,14 @@ REGISTRY = CollectorRegistry()
 REQUEST_COUNT = Counter(
     "ai4x_requests_total",
     "Total number of requests",
-    ["customer", "app", "endpoint", "status"],
+    ["customer", "domain", "app", "endpoint", "status"],
     registry=REGISTRY,
 )
 
 REQUEST_DURATION = Histogram(
     "ai4x_request_duration_seconds",
     "Request duration in seconds",
-    ["customer", "app", "endpoint"],
+    ["customer", "domain", "app", "endpoint"],
     buckets=[0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 25.0],
     registry=REGISTRY,
 )
@@ -50,12 +50,12 @@ COMPONENT_LATENCY = Histogram(
 ERROR_COUNT = Counter(
     "ai4x_errors_total",
     "Total number of errors",
-    ["customer", "app", "endpoint", "error_type"],
+    ["customer", "domain", "app", "endpoint", "error_type"],
     registry=REGISTRY,
 )
 
 # Initialize error count to 0 for dashboard visibility
-ERROR_COUNT.labels("default", "default", "none", "none").inc(0)
+ERROR_COUNT.labels("default", "unknown", "default", "none", "none").inc(0)
 
 # ----------------------------
 GPU_USAGE = Gauge("ai4x_gpu_usage_percent", "GPU usage %", registry=REGISTRY)
@@ -371,11 +371,12 @@ class MetricsCollector:
         self.set_error_rate_percent(0.0)
 
     # ---------- request helpers ----------
-    def start_request(self, customer: str, app: str, endpoint: str, service: str = "pipeline") -> str:
+    def start_request(self, customer: str, app: str, endpoint: str, domain: str = "unknown", service: str = "pipeline") -> str:
         rid = f"{customer}:{app}:{endpoint}:{service}:{int(time.time() * 1e6)}"
         self._req[rid] = {
             "t0": time.time(),
             "customer": customer,
+            "domain": domain,
             "app": app,
             "endpoint": endpoint,
             "service": service,
@@ -421,8 +422,9 @@ class MetricsCollector:
             for old_rid in old_requests:
                 del self._completed_requests[old_rid]
 
-        REQUEST_COUNT.labels(customer, app, ep, status).inc()
-        REQUEST_DURATION.labels(customer, app, ep).observe(dur)
+        domain = d.get("domain", "unknown")
+        REQUEST_COUNT.labels(customer, domain, app, ep, status).inc()
+        REQUEST_DURATION.labels(customer, domain, app, ep).observe(dur)
         
         # Track success/failure for error rate calculation
         key = f"{customer}|{app}"
@@ -430,7 +432,7 @@ class MetricsCollector:
             self._request_success_count[key] = self._request_success_count.get(key, 0) + 1
         else:
             self._request_error_count[key] = self._request_error_count.get(key, 0) + 1
-            ERROR_COUNT.labels(customer, app, ep, status).inc()
+            ERROR_COUNT.labels(customer, domain, app, ep, status).inc()
             
             # Record system availability failure
             if status == "server_error":
@@ -749,8 +751,8 @@ class MetricsCollector:
             raise
 
     @contextmanager
-    def request_timer(self, customer: str, app: str, endpoint: str, service: str = "pipeline"):
-        rid = self.start_request(customer, app, endpoint, service)
+    def request_timer(self, customer: str, app: str, endpoint: str, domain: str = "unknown", service: str = "pipeline"):
+        rid = self.start_request(customer, app, endpoint, domain, service)
         try:
             yield rid
             self.end_request(rid, 200)
